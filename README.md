@@ -1,5 +1,4 @@
 # RippleCI
 COMP350 APP
 
-Jonathan was here!
-Bernie was here!
+Hi guys, Sameen here. Testing my commit to the README file.
