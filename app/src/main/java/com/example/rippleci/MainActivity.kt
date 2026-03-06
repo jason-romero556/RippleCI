@@ -1,5 +1,8 @@
 package com.example.rippleci
 
+import android.util.Log
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
