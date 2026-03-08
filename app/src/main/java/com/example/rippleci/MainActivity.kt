@@ -1,9 +1,7 @@
 package com.example.rippleci
 
-import android.util.Log
-import com.google.firebase.Firebase
-import com.google.firebase.firestore.firestore
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,11 +25,29 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import com.example.rippleci.ui.theme.RippleCITheme
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Test Firebase write
+        val db = Firebase.firestore
+        val testData = hashMapOf(
+            "message" to "RippleCI is connected!",
+            "timestamp" to System.currentTimeMillis()
+        )
+        db.collection("test")
+            .add(testData)
+            .addOnSuccessListener {
+                Log.d("Firebase", "Success!")
+            }
+            .addOnFailureListener { e ->
+                Log.d("Firebase", "Failed: ${e.message}")
+            }
+
         setContent {
             RippleCITheme {
                 RippleCIApp()
