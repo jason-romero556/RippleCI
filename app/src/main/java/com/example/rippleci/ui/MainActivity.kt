@@ -1,4 +1,4 @@
-package com.example.rippleci
+package com.example.rippleci.ui
 
 import android.os.Bundle
 import android.util.Log
@@ -24,16 +24,42 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.rippleci.ui.screens.DisplayScreen
+import com.example.rippleci.ui.screens.InputScreen
 import com.example.rippleci.ui.theme.RippleCITheme
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
+import com.google.firebase.FirebaseApp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Test Firebase write
+        setContent {
+            val navController = rememberNavController()
+
+            NavHost(
+                navController = navController,
+                startDestination = "input"
+            ) {
+                composable("input") {
+                    InputScreen(navController)
+                }
+                composable("display") {
+                    DisplayScreen(navController)
+                }
+            }
+        }
+
+
+
+
+        /* Test Firebase write
+        Log.d("Firebase", "Project ID: ${FirebaseApp.getInstance().options.projectId}")
         val db = Firebase.firestore
         val testData = hashMapOf(
             "message" to "RippleCI is connected!",
@@ -48,14 +74,37 @@ class MainActivity : ComponentActivity() {
                 Log.d("Firebase", "Failed: ${e.message}")
             }
 
+        // Create a new user with a first, middle, and last name
+        val user = hashMapOf(
+            "first" to "Alan",
+            "middle" to "Mathison",
+            "last" to "Turing",
+            "born" to 1912
+        )
+
+// Add a new document with a generated ID
+        db.collection("users")
+            .add(user)
+            .addOnSuccessListener { documentReference ->
+                Log.d("Firebase", "DocumentSnapshot added with ID: ${documentReference.id}")
+            }
+            .addOnFailureListener { e ->
+                Log.w("Firebase", "Error adding document", e)
+            }
+
         setContent {
             RippleCITheme {
                 RippleCIApp()
             }
         }
+
+         */
     }
 }
 
+
+
+/*
 @PreviewScreenSizes
 @Composable
 fun RippleCIApp() {
@@ -111,3 +160,5 @@ fun GreetingPreview() {
         Greeting("Android")
     }
 }
+
+ */

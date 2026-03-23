@@ -24,4 +24,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "Ripple CI"
 include(":app")
- 

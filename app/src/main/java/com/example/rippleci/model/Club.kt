@@ -1,4 +1,7 @@
 package com.example.rippleci.model
 
-class Club {
-}
+data class Club (
+    val id: String = "",
+    val name: String = "",
+    val description: String = ""
+)

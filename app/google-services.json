@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "198524508550",
-    "project_id": "ripple-ci",
-    "storage_bucket": "ripple-ci.firebasestorage.app"
+    "project_number": "303060757131",
+    "project_id": "myapplication1-4614258a",
+    "storage_bucket": "myapplication1-4614258a.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:198524508550:android:8103c48790801ad5faf407",
+        "mobilesdk_app_id": "1:303060757131:android:0798f19311e9b23b38828e",
         "android_client_info": {
           "package_name": "com.example.rippleci"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyACj4Q8KL3rk0ajadJDVn98ovhB8-eEVAw"
+          "current_key": "AIzaSyAe3RfHoDSyyu_viXXJ8dmg-6ZLhtxELok"
         }
       ],
       "services": {
