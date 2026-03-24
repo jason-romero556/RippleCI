@@ -8,8 +8,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -29,12 +27,8 @@ import com.google.firebase.firestore.firestore
 import androidx.compose.foundation.layout.* //Sameen added these 5 imports (one was redundant)//
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.google.maps.android.compose.GoogleMap //Sameen added these 6 imports//
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -102,12 +96,6 @@ fun RippleCIApp() {
                     AppDestinations.HOME -> {
                         Greeting(name = "Home Screen")
                     }
-                    AppDestinations.FAVORITES -> {
-                        Greeting(name = "Favorites Screen")
-                    }
-                    AppDestinations.PROFILE -> {
-                        Greeting(name = "Profile Screen")
-                    }
                 }
             }
         }
@@ -121,8 +109,6 @@ enum class AppDestinations(
     val icon: ImageVector,
 ) {
     HOME("Home", Icons.Default.Home),
-    FAVORITES("Favorites", Icons.Default.Favorite),
-    PROFILE("Profile", Icons.Default.AccountBox),
     MAP("Map", Icons.Default.Place)
 }
 
