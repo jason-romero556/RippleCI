@@ -68,6 +68,7 @@ import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import com.google.maps.android.compose.GoogleMap //Sameen added these 6 imports//
 import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.material.icons.filled.DateRange
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.MapProperties //Sameen added this import to enable "current location" in map//
@@ -206,6 +207,88 @@ fun MainApp(onSignOut: () -> Unit) {
             }
         }
     ) {
+        when (currentDestination) {
+            AppDestinations.MAP -> HomeScreen()
+            AppDestinations.FRIENDS -> FriendsScreen()
+            AppDestinations.PROFILE -> ProfileScreen(onSignOut = onSignOut)
+            AppDestinations.EVENTS -> com.example.rippleci.screens.EventsScreen()
+        }
+    }
+}
+
+@Composable
+fun HomeScreen() {
+    // 1. Set up the permission state
+    val locationPermissionState = rememberPermissionState(
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
+    // 2. Zoomed-in starting position (15f is street level)
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(34.1621, -119.0435), 15f)
+    }
+
+    if (locationPermissionState.status.isGranted) {
+        // 3. ONLY show the map with location enabled if permission is granted
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(isMyLocationEnabled = true),
+            uiSettings = MapUiSettings(myLocationButtonEnabled = true)
+        )
+    } else {
+        // 4. Show a button to request permission if we don't have it
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+            Text("We need your location to show where you are on the map.")
+            Button(onClick = { locationPermissionState.launchPermissionRequest() }) {
+                Text("Grant Permission")
+            }
+        }
+    }
+}
+
+@Composable
+fun FavoritesScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("Favorites Screen")
+    }
+}
+
+@Composable
+fun ProfileScreen(onSignOut: () -> Unit) {
+    val auth = Firebase.auth
+    val db = Firebase.firestore
+    val storage = Firebase.storage
+    val userId = auth.currentUser?.uid
+
+    var name by remember { mutableStateOf("") }
+    var bio by remember { mutableStateOf("") }
+    var major by remember { mutableStateOf("") }
+    var clubs by remember { mutableStateOf("") }
+    var classes by remember { mutableStateOf("") }
+    var profilePictureUrl by remember { mutableStateOf("") }
+    var isEditing by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf("") }
+    var isUploading by remember { mutableStateOf(false) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            isUploading = true
+            val storageRef = storage.reference
+                .child("profile_pictures/$userId.jpg")
+
+            storageRef.putFile(it)
+                .addOnSuccessListener {
+                    storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                        profilePictureUrl = downloadUrl.toString()
+                        userId?.let { uid ->
+                            db.collection("users").document(uid)
+                                .update("profilePictureUrl", profilePictureUrl)
+                        }
+                        isUploading = false
+                        statusMessage = "Profile picture updated!"
         // This is the "Content" area of your app
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
@@ -593,6 +676,15 @@ fun StudentCard(
         }
     }
 }
+enum class AppDestinations(
+    val label: String,
+    val icon: ImageVector,
+) {
+    MAP("Map", Icons.Default.Place),
+    FRIENDS("Friends", Icons.Default.Person),
+    PROFILE("Profile", Icons.Default.AccountBox),
+    EVENTS("Events", Icons.Default.DateRange),
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MyGoogleMap() {
