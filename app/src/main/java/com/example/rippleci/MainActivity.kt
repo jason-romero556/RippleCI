@@ -58,6 +58,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.material.icons.filled.DateRange
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -194,6 +195,7 @@ fun MainApp(onSignOut: () -> Unit) {
             AppDestinations.MAP -> HomeScreen()
             AppDestinations.FRIENDS -> FriendsScreen()
             AppDestinations.PROFILE -> ProfileScreen(onSignOut = onSignOut)
+            AppDestinations.EVENTS -> com.example.rippleci.screens.EventsScreen()
         }
     }
 }
@@ -854,4 +856,6 @@ enum class AppDestinations(
     MAP("Map", Icons.Default.Place),
     FRIENDS("Friends", Icons.Default.Person),
     PROFILE("Profile", Icons.Default.AccountBox),
+    EVENTS("Events", Icons.Default.DateRange),
+
 }
