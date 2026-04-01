@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.FriendsScreen
 import com.example.rippleci.ui.screens.ProfileScreen
+import com.example.rippleci.ui.events.EventsScreen
 
 @Composable
 fun MainApp(onSignOut: () -> Unit) {
@@ -34,7 +35,7 @@ fun MainApp(onSignOut: () -> Unit) {
             AppDestinations.MAP -> HomeScreen()
             AppDestinations.FRIENDS -> FriendsScreen()
             AppDestinations.PROFILE -> ProfileScreen(onSignOut = onSignOut)
-            AppDestinations.EVENTS -> com.example.rippleci.screens.EventsScreen()
+            AppDestinations.EVENTS -> EventsScreen()
         }
     }
 }
