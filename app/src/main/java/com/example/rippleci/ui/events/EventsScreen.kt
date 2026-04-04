@@ -1,5 +1,4 @@
-// File: app/src/main/java/com/example/rippleci/screens/EventsScreen.kt
-package com.example.rippleci.screens
+package com.example.rippleci.ui.events
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,16 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.rippleci.ui.components.EventCard // Assumes your EventCard is here!
+import com.example.rippleci.ui.components.EventCard
 
 @Composable
 fun EventsScreen(
     modifier: Modifier = Modifier,
-    // Inject the ViewModel here
     viewModel: EventsViewModel = viewModel()
 ) {
-    // This line "listens" to the ViewModel. Every time the state changes (Loading -> Success),
-    // the screen automatically redraws itself!
     val uiState by viewModel.uiState.collectAsState()
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -33,7 +29,6 @@ fun EventsScreen(
             modifier = Modifier.padding(16.dp)
         )
 
-        // Handle the states defined in our ViewModel
         when (val state = uiState) {
             is EventsUiState.Loading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -45,7 +40,6 @@ fun EventsScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = "Error: ${state.message}", color = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.height(8.dp))
-                        // A button to try again if the network failed
                         Button(onClick = { viewModel.fetchEvents() }) {
                             Text("Retry")
                         }
