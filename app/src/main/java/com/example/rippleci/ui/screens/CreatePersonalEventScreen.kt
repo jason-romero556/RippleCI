@@ -75,7 +75,7 @@ fun CreatePersonalEventScreen(
 
         TextField(
             value = endTime,
-            onValueChange = { date = it },
+            onValueChange = { endTime = it },
             label = { Text("Event end time") },
         )
 
