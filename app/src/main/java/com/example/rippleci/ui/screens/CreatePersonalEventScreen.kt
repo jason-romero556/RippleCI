@@ -28,9 +28,9 @@ fun CreatePersonalEventScreen(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
-    var dateLabel by remember { mutableStateOf("") }
-    var startTimeLabel by remember { mutableStateOf("") }
-    var endTimeLabel by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var startTime by remember { mutableStateOf("") }
+    var endTime by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.padding(20.dp)) {
         TextField(
@@ -49,6 +49,38 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        TextField(
+            value = location,
+            onValueChange = { location = it },
+            label = { Text("Event location") },
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextField(
+            value = date,
+            onValueChange = { date = it },
+            label = { Text("Event date") },
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextField(
+            value = startTime,
+            onValueChange = { startTime = it },
+            label = { Text("Event start time") },
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        TextField(
+            value = endTime,
+            onValueChange = { date = it },
+            label = { Text("Event end time") },
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Button(
             onClick = {
                 val event =
@@ -56,9 +88,9 @@ fun CreatePersonalEventScreen(
                         title = title,
                         description = description,
                         location = location,
-                        date = dateLabel,
-                        startTime = startTimeLabel,
-                        endTime = endTimeLabel,
+                        date = date,
+                        startTime = startTime,
+                        endTime = endTime,
                     )
                 onSave(event)
             },
