@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.google.android.libraries.mapsplatform.secrets.gradle.plugin)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 android {
@@ -64,6 +65,7 @@ dependencies {
     implementation(libs.play.services.maps)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
