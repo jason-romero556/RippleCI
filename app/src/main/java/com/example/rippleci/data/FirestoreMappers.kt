@@ -2,14 +2,15 @@ package com.example.rippleci.data
 
 // import com.example.rippleci.data.models.Club
 // import com.example.rippleci.data.models.ClubEvent
-import com.example.rippleci.data.models.ClubMessage
+// import com.example.rippleci.data.models.ClubMessage
+// import com.example.rippleci.data.models.FriendRequest
+// import com.example.rippleci.data.models.PersonalEvent
+// import com.example.rippleci.data.models.SchoolEvent
+// import com.example.rippleci.data.models.UserMessage
 import com.example.rippleci.data.models.FriendRequest
-import com.example.rippleci.data.models.PersonalEvent
-import com.example.rippleci.data.models.SchoolEvent
-import com.example.rippleci.data.models.UserMessage
 import com.example.rippleci.data.models.UserProfile
 import com.google.firebase.firestore.DocumentSnapshot
-/*
+
 fun DocumentSnapshot.toUserProfile(): UserProfile =
     UserProfile(
         id = id,
@@ -23,10 +24,6 @@ fun DocumentSnapshot.toUserProfile(): UserProfile =
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
     )
 
-fun DocumentSnapshot.UserMessage(): UserMessage =
-    UserMessage(
-        id = id,
-
 fun DocumentSnapshot.toFriendRequest(): FriendRequest =
     FriendRequest(
         id = id,
@@ -36,7 +33,7 @@ fun DocumentSnapshot.toFriendRequest(): FriendRequest =
         status = getString("status") ?: "pending",
         timestamp = getLong("timestamp") ?: 0L,
     )
-
+/*
 fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
     PersonalEvent(
         id = id,
@@ -80,5 +77,4 @@ fun DocumentSnapshot.toClubEvent(): ClubEvent =
 
 fun DocumentSnapshot.toClubMessage(): ClubMessage =
     ClubMessage(
-
  */

@@ -29,6 +29,8 @@ fun StudentCard(
     isPending: Boolean,
     onAddFriend: () -> Unit,
     onRemoveFriend: () -> Unit,
+    modifier: Modifier = Modifier,
+    actionContent: (@Composable () -> Unit)? = null,
 ) {
     val clubsText = user.clubs.joinToString(", ").ifBlank { "None" }
     val classesText = user.classes.joinToString(", ").ifBlank { "None" }
@@ -75,22 +77,26 @@ fun StudentCard(
                     }
                 }
 
-                when {
-                    isFriend -> {
-                        OutlinedButton(onClick = onRemoveFriend) {
-                            Text("Friends")
+                if (actionContent != null) {
+                    actionContent()
+                } else {
+                    when {
+                        isFriend -> {
+                            OutlinedButton(onClick = onRemoveFriend) {
+                                Text("Friends")
+                            }
                         }
-                    }
 
-                    isPending -> {
-                        OutlinedButton(onClick = {}, enabled = false) {
-                            Text("Pending")
+                        isPending -> {
+                            OutlinedButton(onClick = {}, enabled = false) {
+                                Text("Pending")
+                            }
                         }
-                    }
 
-                    else -> {
-                        Button(onClick = onAddFriend) {
-                            Text("Add")
+                        else -> {
+                            Button(onClick = onAddFriend) {
+                                Text("Add")
+                            }
                         }
                     }
                 }
