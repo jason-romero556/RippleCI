@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,35 +21,71 @@ import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.screens.CollapsibleSection
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
-
-val mockPersonalEvents =
-    listOf(
-        PersonalEvent(
-            id = "1",
-            title = "Study Group",
-            description = "Review algorithms notes",
-            location = "Library",
-            date = "Apr 5",
-            startTime = "3:00 PM",
-            endTime = "4:00 PM",
-        ),
-    )
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
 
 @Composable
 fun EventsScreen(
     modifier: Modifier = Modifier,
     viewModel: EventsViewModel = viewModel(),
 ) {
+    val db = Firebase.firestore
+    val auth = Firebase.auth
+    val userId = auth.currentUser?.uid
+    var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isPersonalExpanded by remember { mutableStateOf(true) }
     var isSchoolExpanded by remember { mutableStateOf(true) }
     var isCreatingEvent by remember { mutableStateOf(false) }
-    var personalEvents by remember { mutableStateOf(mockPersonalEvents) }
+
+    LaunchedEffect(userId) {
+        userId?.let { uid ->
+            db
+                .collection("users")
+                .document(uid)
+                .collection("personalEvents")
+                .get()
+                .addOnSuccessListener { result ->
+                    personalEvents =
+                        result.documents.map { doc ->
+                            PersonalEvent(
+                                id = doc.id,
+                                title = doc.getString("title").orEmpty(),
+                                description = doc.getString("description").orEmpty(),
+                                location = doc.getString("location").orEmpty(),
+                                date = doc.getString("date").orEmpty(),
+                                startTime = doc.getString("startTime").orEmpty(),
+                                endTime = doc.getString("endTime").orEmpty(),
+                            )
+                        }
+                }
+        }
+    }
 
     if (isCreatingEvent) {
         CreatePersonalEventScreen(
             onSave = { newEvent ->
-                personalEvents = personalEvents + newEvent
-                isCreatingEvent = false
+                userId?.let { uid ->
+                    val eventData =
+                        mapOf(
+                            "title" to newEvent.title,
+                            "description" to newEvent.description,
+                            "location" to newEvent.location,
+                            "date" to newEvent.date,
+                            "startTime" to newEvent.startTime,
+                            "endTime" to newEvent.endTime,
+                        )
+
+                    db
+                        .collection("users")
+                        .document(uid)
+                        .collection("personalEvents")
+                        .add(eventData)
+                        .addOnSuccessListener { docRef ->
+                            personalEvents = personalEvents + newEvent.copy(id = docRef.id)
+                            isCreatingEvent = false
+                        }
+                }
             },
             onCancel = {
                 isCreatingEvent = false
