@@ -86,12 +86,6 @@ fun FriendsScreen() {
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text("Friends", style = MaterialTheme.typography.headlineMedium)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         TabRow(selectedTabIndex = selectedTab) {
             Tab(
                 selected = selectedTab == 0,
