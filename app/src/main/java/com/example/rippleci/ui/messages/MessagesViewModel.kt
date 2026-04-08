@@ -160,7 +160,7 @@ class MessagesViewModel : ViewModel() {
         db.collection("conversations").add(convo)
             .addOnSuccessListener { onReady(it.id) }
     }
-  /*  fun fixMemberNames() {
+    fun fixMemberNames() {
         if (currentUserId.isEmpty()) return
         db.collection("conversations")
             .whereArrayContains("members", currentUserId)
@@ -188,7 +188,7 @@ class MessagesViewModel : ViewModel() {
                     }
                 }
             }
-    } */
+    }
     fun clearChatHistory(conversationId: String, onComplete: () -> Unit) {
         db.collection("conversations").document(conversationId)
             .collection("messages")
