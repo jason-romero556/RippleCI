@@ -3,7 +3,7 @@ package com.example.rippleci.ui.events
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rippleci.data.RetrofitInstance
-import com.example.rippleci.data.SchoolEvent
+import com.example.rippleci.data.models.SchoolEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,12 +11,17 @@ import kotlinx.coroutines.launch
 
 sealed class EventsUiState {
     object Loading : EventsUiState()
-    data class Success(val events: List<SchoolEvent>) : EventsUiState()
-    data class Error(val message: String) : EventsUiState()
+
+    data class Success(
+        val events: List<SchoolEvent>,
+    ) : EventsUiState()
+
+    data class Error(
+        val message: String,
+    ) : EventsUiState()
 }
 
 class EventsViewModel : ViewModel() {
-
     private val _uiState = MutableStateFlow<EventsUiState>(EventsUiState.Loading)
     val uiState: StateFlow<EventsUiState> = _uiState.asStateFlow()
 

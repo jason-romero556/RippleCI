@@ -8,10 +8,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.example.rippleci.ui.screens.HomeScreen
-import com.example.rippleci.ui.screens.FriendsScreen
-import com.example.rippleci.ui.screens.ProfileScreen
 import com.example.rippleci.ui.events.EventsScreen
+import com.example.rippleci.ui.screens.FriendsScreen
+import com.example.rippleci.ui.screens.MapScreen
+import com.example.rippleci.ui.screens.ProfileScreen
 
 @Composable
 fun MainApp(onSignOut: () -> Unit) {
@@ -26,13 +26,13 @@ fun MainApp(onSignOut: () -> Unit) {
                     },
                     label = { Text(it.label) },
                     selected = it == currentDestination,
-                    onClick = { currentDestination = it }
+                    onClick = { currentDestination = it },
                 )
             }
-        }
+        },
     ) {
         when (currentDestination) {
-            AppDestinations.MAP -> HomeScreen()
+            AppDestinations.MAP -> MapScreen()
             AppDestinations.FRIENDS -> FriendsScreen()
             AppDestinations.PROFILE -> ProfileScreen(onSignOut = onSignOut)
             AppDestinations.EVENTS -> EventsScreen()

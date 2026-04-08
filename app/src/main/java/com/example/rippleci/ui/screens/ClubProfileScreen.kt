@@ -1,0 +1,29 @@
+package com.example.rippleci.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.rippleci.data.models.Club
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
+
+@Composable
+fun ClubProfileScreen(
+    club: Club,
+    isMember: Boolean,
+    onJoinClub: () -> Unit,
+    onLeaveClub: () -> Unit,
+    onViewEvents: () -> Unit,
+) {
+}

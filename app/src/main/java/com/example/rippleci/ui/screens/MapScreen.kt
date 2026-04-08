@@ -20,16 +20,18 @@ import com.google.maps.android.compose.rememberCameraPositionState
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun HomeScreen() {
+fun MapScreen() {
     // 1. Set up the permission state
-    val locationPermissionState = rememberPermissionState(
-        Manifest.permission.ACCESS_FINE_LOCATION
-    )
+    val locationPermissionState =
+        rememberPermissionState(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
 
     // 2. Zoomed-in starting position (15f is street level)
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(34.1621, -119.0435), 15f)
-    }
+    val cameraPositionState =
+        rememberCameraPositionState {
+            position = CameraPosition.fromLatLngZoom(LatLng(34.1621, -119.0435), 15f)
+        }
 
     if (locationPermissionState.status.isGranted) {
         // 3. ONLY show the map with location enabled if permission is granted
@@ -37,7 +39,7 @@ fun HomeScreen() {
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
             properties = MapProperties(isMyLocationEnabled = true),
-            uiSettings = MapUiSettings(myLocationButtonEnabled = true)
+            uiSettings = MapUiSettings(myLocationButtonEnabled = true),
         )
     } else {
         // 4. Show a button to request permission if we don't have it
