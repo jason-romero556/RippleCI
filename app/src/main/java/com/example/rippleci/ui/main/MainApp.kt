@@ -65,6 +65,7 @@ fun MainApp(onSignOut: () -> Unit) {
 
                         convo?.memberNames?.get(otherUserId) ?: "Chat"
                     }
+
                     openConversationId = convId
                 },
                 viewModel = messagesViewModel
