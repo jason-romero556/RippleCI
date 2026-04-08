@@ -17,5 +17,4 @@ enum class AppDestinations(
     MESSAGES("Messages", Icons.Default.Email),
     PROFILE("Profile", Icons.Default.AccountBox),
     EVENTS("Events", Icons.Default.DateRange),
-
 }

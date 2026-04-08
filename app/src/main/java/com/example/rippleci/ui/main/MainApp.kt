@@ -1,14 +1,23 @@
 package com.example.rippleci.ui.main
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.ui.events.EventsScreen
 import com.example.rippleci.ui.messages.ConversationScreen
@@ -51,52 +60,68 @@ fun MainApp(onSignOut: () -> Unit) {
             }
         },
     ) {
-        when (currentDestination) {
-            AppDestinations.MAP -> {
-                MapScreen()
+        // WRAP THE CONTENT IN A COLUMN
+        Column(modifier = Modifier.fillMaxSize()) {
+            // THE TOP BUFFER BOX
+            // This box uses the theme's surface color and accounts for the system status bar
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding().height(12.dp))
             }
 
-            AppDestinations.FRIENDS -> {
-                FriendsScreen(
-                    onOpenConversation = { convId, convName ->
-                        openConversationId = convId
-                        openConversationName = convName
-                    },
-                    messagesViewModel = messagesViewModel,
-                )
-            }
+            // 2. MAIN SCREEN CONTENT
+            // Modifier.weight(1f) ensures this takes up all remaining space
+            // without covering the bottom navigation bar.
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                when (currentDestination) {
+                    AppDestinations.MAP -> {
+                        MapScreen()
+                    }
 
-            AppDestinations.MESSAGES -> {
-                MessagesScreen(
-                    onOpenConversation = { convId, friendName ->
-                        // Find conversation name from viewModel
-                        val convo =
-                            messagesViewModel.conversations.value
-                                .find { it.conversationId == convId }
-                        openConversationName =
-                            if (convo?.isGroup == true) {
-                                convo.groupName
-                            } else {
-                                val otherUserId =
-                                    convo
-                                        ?.members
-                                        ?.firstOrNull { it != messagesViewModel.currentUserId }
+                    AppDestinations.FRIENDS -> {
+                        FriendsScreen(
+                            onOpenConversation = { convId, convName ->
+                                openConversationId = convId
+                                openConversationName = convName
+                            },
+                            messagesViewModel = messagesViewModel,
+                        )
+                    }
 
-                                convo?.memberNames?.get(otherUserId) ?: "Chat"
-                            }
+                    AppDestinations.MESSAGES -> {
+                        MessagesScreen(
+                            onOpenConversation = { convId, friendName ->
+                                val convo =
+                                    messagesViewModel.conversations.value
+                                        .find { it.conversationId == convId }
+                                openConversationName =
+                                    if (convo?.isGroup == true) {
+                                        convo.groupName
+                                    } else {
+                                        val otherUserId =
+                                            convo
+                                                ?.members
+                                                ?.firstOrNull { it != messagesViewModel.currentUserId }
 
-                        openConversationId = convId
-                    },
-                    viewModel = messagesViewModel,
-                )
-            }
+                                        convo?.memberNames?.get(otherUserId) ?: "Chat"
+                                    }
 
-            AppDestinations.PROFILE -> {
-                ProfileScreen(onSignOut = onSignOut)
-            }
+                                openConversationId = convId
+                            },
+                            viewModel = messagesViewModel,
+                        )
+                    }
 
-            AppDestinations.EVENTS -> {
-                EventsScreen()
+                    AppDestinations.PROFILE -> {
+                        ProfileScreen(onSignOut = onSignOut)
+                    }
+
+                    AppDestinations.EVENTS -> {
+                        EventsScreen()
+                    }
+                }
             }
         }
     }
