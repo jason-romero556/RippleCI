@@ -4,20 +4,22 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.google.android.libraries.mapsplatform.secrets.gradle.plugin)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 android {
     namespace = "com.example.rippleci"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version =
+            release(36) {
+                minorApiLevel = 1
+            }
     }
 
     defaultConfig {
         applicationId = "com.example.rippleci"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -29,7 +31,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
@@ -50,8 +52,8 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
-    implementation("com.google.maps.android:maps-compose:4.4.1") //Added by Sameen
-    implementation("com.google.accompanist:accompanist-permissions:0.34.0") //Added by Sameen
+    implementation("com.google.maps.android:maps-compose:4.4.1") // Added by Sameen
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0") // Added by Sameen
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -63,6 +65,7 @@ dependencies {
     implementation(libs.play.services.maps)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
