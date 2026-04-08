@@ -2,6 +2,7 @@ package com.example.rippleci.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -10,12 +11,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import com.example.rippleci.ui.components.ProfileInfoRow
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
@@ -26,7 +28,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun FriendsScreen(
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
-    messagesViewModel: MessagesViewModel
+    messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -45,74 +47,96 @@ fun FriendsScreen(
 
     LaunchedEffect(currentUserId) {
         currentUserId?.let { uid ->
-            db.collection("users").document(uid)
+            db
+                .collection("users")
+                .document(uid)
                 .addSnapshotListener { doc, _ ->
-                    val ids = (doc?.get("friends") as? List<*>)
-                        ?.mapNotNull { it as? String } ?: emptyList()
+                    val ids =
+                        (doc?.get("friends") as? List<*>)
+                            ?.mapNotNull { it as? String } ?: emptyList()
                     friendIds = ids
 
                     if (ids.isNotEmpty()) {
-                        db.collection("users").whereIn("__name__", ids).get()
+                        db
+                            .collection("users")
+                            .whereIn("__name__", ids)
+                            .get()
                             .addOnSuccessListener { result ->
-                                friendProfiles = result.documents.map { d ->
-                                    Pair(d.id, d.data ?: emptyMap())
-                                }
+                                friendProfiles =
+                                    result.documents.map { d ->
+                                        Pair(d.id, d.data ?: emptyMap())
+                                    }
                             }
                     } else {
                         friendProfiles = emptyList()
                     }
                 }
 
-            db.collection("friendRequests")
+            db
+                .collection("friendRequests")
                 .whereEqualTo("fromUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    pendingRequestIds = snapshot?.documents
+                    pendingRequestIds = snapshot
+                        ?.documents
                         ?.mapNotNull { it.getString("toUserId") } ?: emptyList()
                 }
 
-            db.collection("friendRequests")
+            db
+                .collection("friendRequests")
                 .whereEqualTo("toUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    val requests = snapshot?.documents?.map { doc ->
-                        Pair(doc.id, doc.data ?: emptyMap())
-                    } ?: emptyList()
+                    val requests =
+                        snapshot?.documents?.map { doc ->
+                            Pair(doc.id, doc.data ?: emptyMap())
+                        } ?: emptyList()
                     incomingRequests = requests
                 }
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
+            // Screen Header that lines up with the top buffer
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Text(
+                    text = "Friends",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
 
-            Text("Friends", style = MaterialTheme.typography.headlineMedium)
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("My Friends (${friendIds.size})") }
+                    text = { Text("My Friends (${friendIds.size})") },
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Requests (${incomingRequests.size})") }
+                    text = { Text("Requests (${incomingRequests.size})") },
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    text = { Text("Find Students") }
+                    text = { Text("Find Students") },
                 )
             }
 
@@ -123,22 +147,23 @@ fun FriendsScreen(
                     if (friendProfiles.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 "No friends yet!\nSearch for students to add.",
                                 color = MaterialTheme.colorScheme.secondary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
                         }
                     } else {
                         Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState())
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
                             friendProfiles.filter { (friendId, _) -> friendId != currentUserId }.forEach { (friendId, user) ->
-                                val friendName = user["name"] as? String
-                                    ?: user["email"] as? String
-                                    ?: "Unknown"
+                                val friendName =
+                                    user["name"] as? String
+                                        ?: user["email"] as? String
+                                        ?: "Unknown"
                                 StudentCard(
                                     userId = friendId,
                                     user = user,
@@ -147,10 +172,13 @@ fun FriendsScreen(
                                     onAddFriend = {},
                                     onRemoveFriend = {
                                         currentUserId?.let { uid ->
-                                            db.collection("users").document(uid)
+                                            db
+                                                .collection("users")
+                                                .document(uid)
                                                 .update(
                                                     "friends",
-                                                    com.google.firebase.firestore.FieldValue.arrayRemove(friendId)
+                                                    com.google.firebase.firestore.FieldValue
+                                                        .arrayRemove(friendId),
                                                 )
                                             scope.launch {
                                                 snackbarHostState.showSnackbar("$friendName removed from friends")
@@ -163,11 +191,11 @@ fun FriendsScreen(
                                         android.util.Log.d("MSG_DEBUG", "otherUserName: $friendName")
                                         messagesViewModel.getOrCreateDMConversation(
                                             otherUserId = friendId,
-                                            otherUserName = friendName
+                                            otherUserName = friendName,
                                         ) { convId ->
                                             onOpenConversation(convId, friendName)
                                         }
-                                    }
+                                    },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -179,38 +207,40 @@ fun FriendsScreen(
                     if (incomingRequests.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 "No pending requests",
-                                color = MaterialTheme.colorScheme.secondary
+                                color = MaterialTheme.colorScheme.secondary,
                             )
                         }
                     } else {
                         Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState())
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
                             incomingRequests.forEach { (requestId, request) ->
                                 val fromUserId = request["fromUserId"] as? String ?: ""
                                 val fromUserName = request["fromUserName"] as? String ?: "Unknown"
 
                                 Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                                 ) {
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Icon(
                                             Icons.Default.AccountCircle,
                                             contentDescription = null,
                                             modifier = Modifier.size(48.dp),
-                                            tint = MaterialTheme.colorScheme.secondary
+                                            tint = MaterialTheme.colorScheme.secondary,
                                         )
 
                                         Spacer(modifier = Modifier.width(12.dp))
@@ -218,12 +248,12 @@ fun FriendsScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = fromUserName,
-                                                style = MaterialTheme.typography.titleMedium
+                                                style = MaterialTheme.typography.titleMedium,
                                             )
                                             Text(
                                                 text = "Wants to be your friend",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.secondary
+                                                color = MaterialTheme.colorScheme.secondary,
                                             )
                                         }
 
@@ -231,24 +261,34 @@ fun FriendsScreen(
                                             onClick = {
                                                 currentUserId?.let { uid ->
                                                     val batch = db.batch()
-                                                    val requestRef = db.collection("friendRequests")
-                                                        .document(requestId)
+                                                    val requestRef =
+                                                        db
+                                                            .collection("friendRequests")
+                                                            .document(requestId)
                                                     batch.update(requestRef, "status", "accepted")
-                                                    val currentUserRef = db.collection("users")
-                                                        .document(uid)
-                                                    val otherUserRef = db.collection("users")
-                                                        .document(fromUserId)
+                                                    val currentUserRef =
+                                                        db
+                                                            .collection("users")
+                                                            .document(uid)
+                                                    val otherUserRef =
+                                                        db
+                                                            .collection("users")
+                                                            .document(fromUserId)
                                                     batch.update(
-                                                        currentUserRef, "friends",
-                                                        com.google.firebase.firestore.FieldValue.arrayUnion(fromUserId)
+                                                        currentUserRef,
+                                                        "friends",
+                                                        com.google.firebase.firestore.FieldValue
+                                                            .arrayUnion(fromUserId),
                                                     )
                                                     batch.update(
-                                                        otherUserRef, "friends",
-                                                        com.google.firebase.firestore.FieldValue.arrayUnion(uid)
+                                                        otherUserRef,
+                                                        "friends",
+                                                        com.google.firebase.firestore.FieldValue
+                                                            .arrayUnion(uid),
                                                     )
                                                     batch.commit()
                                                 }
-                                            }
+                                            },
                                         ) {
                                             Text("Accept")
                                         }
@@ -257,9 +297,11 @@ fun FriendsScreen(
 
                                         OutlinedButton(
                                             onClick = {
-                                                db.collection("friendRequests").document(requestId)
+                                                db
+                                                    .collection("friendRequests")
+                                                    .document(requestId)
                                                     .update("status", "denied")
-                                            }
+                                            },
                                         ) {
                                             Text("Deny")
                                         }
@@ -281,28 +323,31 @@ fun FriendsScreen(
                                 if (searchQuery.isNotBlank()) {
                                     isSearching = true
                                     val query = searchQuery.trim().lowercase()
-                                    db.collection("users").get()
+                                    db
+                                        .collection("users")
+                                        .get()
                                         .addOnSuccessListener { result ->
-                                            searchResults = result.documents
-                                                .filter { doc ->
-                                                    if (doc.id == currentUserId) return@filter false
-                                                    val major = (doc.getString("major") ?: "").lowercase()
-                                                    val majorMatch = major.contains(query)
-                                                    val clubMatch = (doc.get("clubs") as? List<*>)
-                                                        ?.any { it.toString().lowercase() == query } ?: false
-                                                    val classMatch = (doc.get("classes") as? List<*>)
-                                                        ?.any { it.toString().lowercase() == query } ?: false
-                                                    majorMatch || clubMatch || classMatch
-                                                }
-                                                .map { doc -> Pair(doc.id, doc.data ?: emptyMap()) }
+                                            searchResults =
+                                                result.documents
+                                                    .filter { doc ->
+                                                        if (doc.id == currentUserId) return@filter false
+                                                        val major = (doc.getString("major") ?: "").lowercase()
+                                                        val majorMatch = major.contains(query)
+                                                        val clubMatch =
+                                                            (doc.get("clubs") as? List<*>)
+                                                                ?.any { it.toString().lowercase() == query } ?: false
+                                                        val classMatch =
+                                                            (doc.get("classes") as? List<*>)
+                                                                ?.any { it.toString().lowercase() == query } ?: false
+                                                        majorMatch || clubMatch || classMatch
+                                                    }.map { doc -> Pair(doc.id, doc.data ?: emptyMap()) }
                                             isSearching = false
-                                        }
-                                        .addOnFailureListener { isSearching = false }
+                                        }.addOnFailureListener { isSearching = false }
                                 }
                             }) {
                                 Icon(Icons.Default.Search, contentDescription = "Search")
                             }
-                        }
+                        },
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -313,7 +358,7 @@ fun FriendsScreen(
                         Text("No students found", color = MaterialTheme.colorScheme.secondary)
                     } else {
                         Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState())
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
                             searchResults.forEach { (userId, user) ->
                                 StudentCard(
@@ -323,31 +368,38 @@ fun FriendsScreen(
                                     isPending = pendingRequestIds.contains(userId),
                                     onAddFriend = {
                                         currentUserId?.let { uid ->
-                                            val request = hashMapOf(
-                                                "fromUserId" to uid,
-                                                "fromUserName" to (auth.currentUser?.email ?: ""),
-                                                "toUserId" to userId,
-                                                "status" to "pending",
-                                                "timestamp" to System.currentTimeMillis()
-                                            )
+                                            val request =
+                                                hashMapOf(
+                                                    "fromUserId" to uid,
+                                                    "fromUserName" to (auth.currentUser?.email ?: ""),
+                                                    "toUserId" to userId,
+                                                    "status" to "pending",
+                                                    "timestamp" to System.currentTimeMillis(),
+                                                )
                                             db.collection("friendRequests").add(request)
                                         }
                                     },
                                     onRemoveFriend = {
                                         currentUserId?.let { uid ->
-                                            db.collection("users").document(uid)
-                                                .update("friends", com.google.firebase.firestore.FieldValue.arrayRemove(userId))
+                                            db
+                                                .collection("users")
+                                                .document(uid)
+                                                .update(
+                                                    "friends",
+                                                    com.google.firebase.firestore.FieldValue
+                                                        .arrayRemove(userId),
+                                                )
                                         }
                                     },
                                     onMessage = {
                                         val friendName = user["name"] as? String ?: user["email"] as? String ?: "Unknown"
                                         messagesViewModel.getOrCreateDMConversation(
                                             otherUserId = userId,
-                                            otherUserName = friendName
+                                            otherUserName = friendName,
                                         ) { convId ->
                                             onOpenConversation(convId, friendName)
                                         }
-                                    }
+                                    },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -367,7 +419,7 @@ fun StudentCard(
     isPending: Boolean,
     onAddFriend: () -> Unit,
     onRemoveFriend: () -> Unit,
-    onMessage: (() -> Unit)? = null
+    onMessage: (() -> Unit)? = null,
 ) {
     val name = user["name"] as? String ?: "Unknown"
     val major = user["major"] as? String ?: "No major set"
@@ -380,28 +432,29 @@ fun StudentCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 if (profilePictureUrl.isNotEmpty()) {
                     AsyncImage(
                         model = profilePictureUrl,
                         contentDescription = "Profile Picture",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
+                        modifier =
+                            Modifier
+                                .size(48.dp)
+                                .clip(CircleShape),
                     )
                 } else {
                     Icon(
                         Icons.Default.AccountCircle,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.secondary
+                        tint = MaterialTheme.colorScheme.secondary,
                     )
                 }
 
@@ -413,20 +466,28 @@ fun StudentCard(
                         Text(
                             text = bio,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
+                            color = MaterialTheme.colorScheme.secondary,
                         )
                     }
                 }
 
                 when {
-                    isFriend -> OutlinedButton(onClick = { showRemoveDialog = true }) {
-                        Text("Friends ✓")
+                    isFriend -> {
+                        OutlinedButton(onClick = { showRemoveDialog = true }) {
+                            Text("Friends ✓")
+                        }
                     }
-                    isPending -> OutlinedButton(onClick = {}, enabled = false) {
-                        Text("Pending")
+
+                    isPending -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("Pending")
+                        }
                     }
-                    else -> Button(onClick = onAddFriend) {
-                        Text("Add")
+
+                    else -> {
+                        Button(onClick = onAddFriend) {
+                            Text("Add")
+                        }
                     }
                 }
             }
@@ -440,7 +501,7 @@ fun StudentCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onMessage,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Message")
                 }
@@ -459,9 +520,10 @@ fun StudentCard(
                         onRemoveFriend()
                         showRemoveDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
                 ) {
                     Text("Remove")
                 }
@@ -470,7 +532,7 @@ fun StudentCard(
                 OutlinedButton(onClick = { showRemoveDialog = false }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 }

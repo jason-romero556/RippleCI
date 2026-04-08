@@ -23,7 +23,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.storage
-import com.example.rippleci.ui.components.ProfileInfoRow
+
 @Composable
 fun ProfileScreen(onSignOut: () -> Unit) {
     val auth = Firebase.auth
