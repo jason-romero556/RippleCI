@@ -10,4 +10,5 @@ data class UserProfile(
     val classes: List<String> = emptyList(),
     val friends: List<String> = emptyList(),
     val profilePictureUrl: String = "",
+    val visibility: String = "public",
 )
