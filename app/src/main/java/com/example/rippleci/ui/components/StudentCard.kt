@@ -29,11 +29,12 @@ fun StudentCard(
     isPending: Boolean,
     onAddFriend: () -> Unit,
     onRemoveFriend: () -> Unit,
+    onMessage: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    actionContent: (@Composable () -> Unit)? = null,
 ) {
     val clubsText = user.clubs.joinToString(", ").ifBlank { "None" }
     val classesText = user.classes.joinToString(", ").ifBlank { "None" }
+    var showRemoveDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -77,26 +78,22 @@ fun StudentCard(
                     }
                 }
 
-                if (actionContent != null) {
-                    actionContent()
-                } else {
-                    when {
-                        isFriend -> {
-                            OutlinedButton(onClick = onRemoveFriend) {
-                                Text("Friends")
-                            }
+                when {
+                    isFriend -> {
+                        OutlinedButton(onClick = { showRemoveDialog = true }) {
+                            Text("Friends")
                         }
+                    }
 
-                        isPending -> {
-                            OutlinedButton(onClick = {}, enabled = false) {
-                                Text("Pending")
-                            }
+                    isPending -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("Pending")
                         }
+                    }
 
-                        else -> {
-                            Button(onClick = onAddFriend) {
-                                Text("Add")
-                            }
+                    else -> {
+                        Button(onClick = onAddFriend) {
+                            Text("Add")
                         }
                     }
                 }
@@ -106,6 +103,44 @@ fun StudentCard(
             InfoRow("Major", user.major.ifBlank { "Not set" })
             InfoRow("Clubs", clubsText)
             InfoRow("Classes", classesText)
+
+            if (isFriend && onMessage != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onMessage,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Message")
+                }
+            }
+        }
+        if (showRemoveDialog) {
+            AlertDialog(
+                onDismissRequest = { showRemoveDialog = false },
+                title = { Text("Remove Friend") },
+                text = {
+                    Text("Are you sure you want to remove ${user.name.ifBlank { "this user" }} as a friend?")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onRemoveFriend()
+                            showRemoveDialog = false
+                        },
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                            ),
+                    ) {
+                        Text("Remove")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showRemoveDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
+            )
         }
     }
 }

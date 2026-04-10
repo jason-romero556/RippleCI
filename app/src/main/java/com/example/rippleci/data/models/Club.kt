@@ -7,6 +7,8 @@ data class Club(
     val category: String = "",
     val ownerUserId: String = "",
     val memberIds: List<String> = emptyList(),
+    val officerIds: List<String> = emptyList(),
     val adminIds: List<String> = emptyList(),
     val profilePictureUrl: String = "",
+    val visibility: String = "public",
 )
