@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.components.ProfileInfoRow
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
@@ -116,7 +117,12 @@ fun FriendsScreen(
                     text = "Friends",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(
+                        start = helpfulLinksMenuTitleStartPadding,
+                        top = 16.dp,
+                        end = 16.dp,
+                        bottom = 16.dp,
+                    )
                 )
             }
 
