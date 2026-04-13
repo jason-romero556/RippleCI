@@ -1,13 +1,10 @@
 package com.example.rippleci.data
 
-// import com.example.rippleci.data.models.Club
-// import com.example.rippleci.data.models.ClubEvent
-// import com.example.rippleci.data.models.ClubMessage
-// import com.example.rippleci.data.models.FriendRequest
-// import com.example.rippleci.data.models.PersonalEvent
-// import com.example.rippleci.data.models.SchoolEvent
-// import com.example.rippleci.data.models.UserMessage
+import com.example.rippleci.data.models.Club
+import com.example.rippleci.data.models.ClubEvent
 import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.models.SchoolEvent
 import com.example.rippleci.data.models.UserProfile
 import com.google.firebase.firestore.DocumentSnapshot
 
@@ -33,7 +30,7 @@ fun DocumentSnapshot.toFriendRequest(): FriendRequest =
         status = getString("status") ?: "pending",
         timestamp = getLong("timestamp") ?: 0L,
     )
-/*
+
 fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
     PersonalEvent(
         id = id,
@@ -47,34 +44,37 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
 
 fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
     SchoolEvent(
-        eventID = id,
-        title = getString(field = "title").orEmpty(),
-        description = getString(field = "description").orEmpty(),
-        location = getString(field = "location").orEmpty(),
-        startDateTime = getString(field = "startDateTime").orEmpty(),
-        endDateTime = getString(field = "endDateTime").orEmpty(),
-        dateTimeFormatted = getString(field = "dateTimeFormatted").orEmpty(),
-        permaLinkURL = getString(field = "permaLinkURL").orEmpty(),
+        id = id,
+        title = getString("name").orEmpty(),
+        description = getString("description").orEmpty(),
+        location = getString("location").orEmpty(),
+        startDateTime = getString("startDateTime").orEmpty(),
+        endDateTime = getString("endDateTime").orEmpty(),
+        dateTimeFormatted = getString("dateTimeFormatted").orEmpty(),
+        permaLinkUrl = getString("permaLinkURL").orEmpty(),
     )
 
 fun DocumentSnapshot.toClub(): Club =
     Club(
         id = id,
-        focus = getString("focus").orEmpty(),
+        name = getString("name").orEmpty(),
+        description = getString("description").orEmpty(),
+        category = getString("category").orEmpty(),
+        ownerUserId = getString("ownerUserId").orEmpty(),
+        memberIds = (get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        officerIds = (get("officerIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        adminIds = (get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        profilePictureUrl = getString("profilePictureUrl").orEmpty(),
     )
 
 fun DocumentSnapshot.toClubEvent(): ClubEvent =
     ClubEvent(
-        eventID = id,
-        title = getString(field = "title").orEmpty(),
-        description = getString(field = "description").orEmpty(),
-        location = getString(field = "location").orEmpty(),
-        startDateTime = getString(field = "startDateTime").orEmpty(),
-        endDateTime = getString(field = "endDateTime").orEmpty(),
-        dateTimeFormatted = getString(field = "dateTimeFormatted").orEmpty(),
-        permaLinkURL = getString(field = "permaLinkURL").orEmpty(),
+        id = id,
+        title = getString("title").orEmpty(),
+        description = getString("description").orEmpty(),
+        location = getString("location").orEmpty(),
+        startTime = getString("startDateTime").orEmpty(),
+        endTime = getString("endDateTime").orEmpty(),
+        date = getString("date").orEmpty(),
+        permaLinkUrl = getString("permaLinkUrl").orEmpty(),
     )
-
-fun DocumentSnapshot.toClubMessage(): ClubMessage =
-    ClubMessage(
- */

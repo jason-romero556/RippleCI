@@ -3,16 +3,15 @@ package com.example.rippleci.ui.main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,13 +28,16 @@ import com.example.rippleci.ui.screens.FriendsScreen
 import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 
 @Composable
 fun MainApp(onSignOut: () -> Unit) {
     var currentDestination by remember { mutableStateOf(AppDestinations.MAP) }
     var openConversationId by remember { mutableStateOf<String?>(null) }
     var openConversationName by remember { mutableStateOf("") }
-    val messagesViewModel: MessagesViewModel = viewModel()
+    val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
+    val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
 
     // If a conversation is open, show it full screen
     if (openConversationId != null) {
@@ -68,7 +70,7 @@ fun MainApp(onSignOut: () -> Unit) {
             // This box uses the theme's surface color and accounts for the system status bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface
+                color = MaterialTheme.colorScheme.surface,
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding().height(12.dp))
             }
