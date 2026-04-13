@@ -7,6 +7,11 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    debug.set(true)
+    verbose.set(true)
+}
+
 android {
     namespace = "com.example.rippleci"
     compileSdk {

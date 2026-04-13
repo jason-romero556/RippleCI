@@ -18,15 +18,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             RippleCITheme {
                 val auth = Firebase.auth
-                var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
+                var currentUserId by remember { mutableStateOf(auth.currentUser?.uid) }
 
-                if (isLoggedIn) {
-                    MainApp(onSignOut = {
-                        auth.signOut()
-                        isLoggedIn = false
-                    })
+                if (currentUserId != null) {
+                    key(currentUserId) {
+                        MainApp(onSignOut = {
+                            auth.signOut()
+                            currentUserId = null
+                        })
+                    }
                 } else {
-                    LoginScreen(onLoginSuccess = { isLoggedIn = true })
+                    LoginScreen(onLoginSuccess = {
+                        currentUserId = auth.currentUser?.uid
+                    })
                 }
             }
         }
