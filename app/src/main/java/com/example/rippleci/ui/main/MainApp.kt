@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.ui.components.HelpfulLinksMenuButton
 import com.example.rippleci.ui.events.EventsScreen
 import com.example.rippleci.ui.messages.ConversationScreen
 import com.example.rippleci.ui.messages.MessagesScreen
@@ -125,6 +126,12 @@ fun MainApp(onSignOut: () -> Unit) {
                         EventsScreen()
                     }
                 }
+
+                HelpfulLinksMenuButton(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 8.dp, top = 8.dp),
+                )
             }
         }
     }
