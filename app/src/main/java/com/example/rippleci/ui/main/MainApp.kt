@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.data.AppRoute
 import com.example.rippleci.ui.events.EventsScreen
 import com.example.rippleci.ui.messages.ConversationScreen
 import com.example.rippleci.ui.messages.MessagesScreen
@@ -33,6 +34,7 @@ import com.google.firebase.auth.auth
 @Composable
 fun MainApp(onSignOut: () -> Unit) {
     var currentDestination by remember { mutableStateOf(AppDestinations.MAP) }
+    var route by remember { mutableStateOf<AppRoute>(AppRoute.MainTabs) }
     var openConversationId by remember { mutableStateOf<String?>(null) }
     var openConversationName by remember { mutableStateOf("") }
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
