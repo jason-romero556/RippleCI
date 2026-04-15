@@ -32,7 +32,7 @@ fun StudentCard(
     onMessage: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val clubsText = user.clubs.joinToString(", ").ifBlank { "None" }
+    val clubsText = user.clubIds.joinToString(", ").ifBlank { "None" }
     val classesText = user.classes.joinToString(", ").ifBlank { "None" }
     var showRemoveDialog by remember { mutableStateOf(false) }
 

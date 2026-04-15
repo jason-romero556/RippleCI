@@ -1,7 +1,7 @@
 package com.example.rippleci.data
 
-import com.example.rippleci.data.models.Club
 import com.example.rippleci.data.models.ClubEvent
+import com.example.rippleci.data.models.ClubProfile
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.SchoolEvent
@@ -15,9 +15,9 @@ fun DocumentSnapshot.toUserProfile(): UserProfile =
         bio = getString("bio").orEmpty(),
         email = getString("email").orEmpty(),
         major = getString("major").orEmpty(),
-        clubs = (get("clubs") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        clubIds = (get("clubs") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         classes = (get("classes") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-        friends = (get("friends") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        friendIds = (get("friends") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
     )
 
@@ -54,8 +54,8 @@ fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
         permaLinkUrl = getString("permaLinkURL").orEmpty(),
     )
 
-fun DocumentSnapshot.toClub(): Club =
-    Club(
+fun DocumentSnapshot.toClubProfile(): ClubProfile =
+    ClubProfile(
         id = id,
         name = getString("name").orEmpty(),
         description = getString("description").orEmpty(),

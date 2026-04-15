@@ -6,9 +6,10 @@ data class UserProfile(
     val bio: String = "",
     val email: String = "",
     val major: String = "",
-    val clubs: List<String> = emptyList(),
     val classes: List<String> = emptyList(),
-    val friends: List<String> = emptyList(),
+    val clubIds: List<String> = emptyList(),
+    val eventIds: List<String> = emptyList(),
+    val friendIds: List<String> = emptyList(),
     val profilePictureUrl: String = "",
     val visibility: String = "public",
 )
