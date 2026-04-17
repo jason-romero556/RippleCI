@@ -68,7 +68,6 @@ fun HelpfulLinksMenuButton(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = { expanded = false },
-        modifier = Modifier.statusBarsPadding(),
     ) {
         links.forEach { link ->
             DropdownMenuItem(
