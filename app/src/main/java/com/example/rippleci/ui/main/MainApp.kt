@@ -70,12 +70,30 @@ fun MainApp(onSignOut: () -> Unit) {
         // WRAP THE CONTENT IN A COLUMN
         Column(modifier = Modifier.fillMaxSize()) {
             // THE TOP BUFFER BOX
-            // This box uses the theme's surface color and accounts for the system status bar
+            // This box now contains the hamburger menu and handles status bar padding
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 4.dp // Add a slight shadow for depth
             ) {
-                Spacer(modifier = Modifier.statusBarsPadding().height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .fillMaxWidth()
+                ) {
+                    HelpfulLinksMenuButton(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 8.dp)
+                    )
+
+                    Text(
+                        text = currentDestination.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
             }
 
             // 2. MAIN SCREEN CONTENT

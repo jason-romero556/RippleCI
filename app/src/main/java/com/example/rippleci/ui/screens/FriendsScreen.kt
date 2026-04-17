@@ -110,19 +110,6 @@ fun FriendsScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
         ) {
-            // Screen Header that lines up with the top buffer
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-            ) {
-                Text(
-                    text = "Friends",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-
             Spacer(modifier = Modifier.height(8.dp))
 
             TabRow(selectedTabIndex = selectedTab) {
