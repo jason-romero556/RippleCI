@@ -26,10 +26,13 @@ import com.example.rippleci.ui.events.EventsScreen
 import com.example.rippleci.ui.messages.ConversationScreen
 import com.example.rippleci.ui.messages.MessagesScreen
 import com.example.rippleci.ui.messages.MessagesViewModel
+import com.example.rippleci.ui.screens.ClubProfileScreen
+import com.example.rippleci.ui.screens.EventProfileScreen
 import com.example.rippleci.ui.screens.FriendsScreen
 import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
+import com.example.rippleci.ui.screens.UserProfileScreen
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
@@ -37,124 +40,174 @@ import com.google.firebase.auth.auth
 fun MainApp(onSignOut: () -> Unit) {
     var currentDestination by remember { mutableStateOf(AppDestinations.MAP) }
     var route by remember { mutableStateOf<AppRoute>(AppRoute.MainTabs) }
-    var openConversationId by remember { mutableStateOf<String?>(null) }
-    var openConversationName by remember { mutableStateOf("") }
+    // var openConversationId by remember { mutableStateOf<String?>(null) }
+    // var openConversationName by remember { mutableStateOf("") }
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
 
-    // If a conversation is open, show it full screen
-    if (openConversationId != null) {
-        ConversationScreen(
-            conversationId = openConversationId!!,
-            conversationName = openConversationName,
-            onBack = { openConversationId = null },
-            viewModel = messagesViewModel,
-        )
-        return
-    }
-
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            AppDestinations.entries.forEach {
-                item(
-                    icon = {
-                        Icon(it.icon, contentDescription = it.label)
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestination = it },
-                )
-            }
-        },
-    ) {
-        // WRAP THE CONTENT IN A COLUMN
-        Column(modifier = Modifier.fillMaxSize()) {
-            // THE TOP BUFFER BOX
-            // This box now contains the hamburger menu and handles status bar padding
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 4.dp // Add a slight shadow for depth
+    when (val currentRoute = route) {
+        AppRoute.MainTabs -> {
+            NavigationSuiteScaffold(
+                {
+                    AppDestinations.entries.forEach { destination ->
+                        item(
+                            icon = {
+                                Icon(
+                                    destination.icon,
+                                    contentDescription = destination.label,
+                                )
+                            },
+                            label = {
+                                Text(destination.label)
+                            },
+                            selected = destination == currentDestination,
+                            onClick = {
+                                currentDestination = destination
+                            },
+                        )
+                    }
+                },
             ) {
-                Box(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .height(56.dp)
-                        .fillMaxWidth()
-                ) {
-                    HelpfulLinksMenuButton(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 8.dp)
-                    )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // TOP BUFFER BOX—now contains the hamburger menu and handles status bar padding
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 4.dp, // Add a slight shadow for depth
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .statusBarsPadding()
+                                    .height(56.dp)
+                                    .fillMaxWidth(),
+                        ) {
+                            HelpfulLinksMenuButton(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 8.dp),
+                            )
 
-                    Text(
-                        text = currentDestination.label,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                            Text(
+                                text = currentDestination.label,
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.align(Alignment.Center),
+                            )
+                        }
+                    }
+
+                    // 2. MAIN SCREEN CONTENT
+                    // Modifier.weight(1f) ensures this takes up all remaining space
+                    // without covering the bottom navigation bar.
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        when (currentDestination) {
+                            AppDestinations.MAP -> {
+                                MapScreen()
+                            }
+
+                            AppDestinations.FRIENDS -> {
+                                FriendsScreen(
+                                    onOpenConversation = { conversationId, convName ->
+                                        route = AppRoute.Conversation(conversationId, convName)
+                                    },
+                                    onOpenUserProfile = { userId ->
+                                        route = AppRoute.UserProfile(userId)
+                                    },
+                                    messagesViewModel = messagesViewModel,
+                                )
+                            }
+
+                            AppDestinations.MESSAGES -> {
+                                MessagesScreen(
+                                    onOpenConversation = { conversationId, convName ->
+                                        route = AppRoute.Conversation(conversationId, convName)
+                                    },
+                                    onOpenUserProfile = { userId ->
+                                        route = AppRoute.UserProfile(userId)
+                                    },
+                                    onOpenClubProfile = { clubId ->
+                                        route = AppRoute.ClubProfile(clubId)
+                                    },
+                                    onOpenEventProfile = { eventId ->
+                                        route = AppRoute.EventProfile(eventId)
+                                    },
+                                    viewModel = messagesViewModel,
+                                )
+                            }
+
+                            AppDestinations.PROFILE -> {
+                                ProfileScreen(onSignOut = onSignOut)
+                            }
+
+                            AppDestinations.EVENTS -> {
+                                EventsScreen()
+                            }
+                        }
+                    }
                 }
             }
+        }
 
-            // 2. MAIN SCREEN CONTENT
-            // Modifier.weight(1f) ensures this takes up all remaining space
-            // without covering the bottom navigation bar.
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                when (currentDestination) {
-                    AppDestinations.MAP -> {
-                        MapScreen()
-                    }
+        is AppRoute.Conversation -> {
+            ConversationScreen(
+                conversationId = currentRoute.conversationId,
+                conversationName = currentRoute.title,
+                onBack = { route = AppRoute.MainTabs },
+                viewModel = messagesViewModel,
+            )
+        }
 
-                    AppDestinations.FRIENDS -> {
-                        FriendsScreen(
-                            onOpenConversation = { convId, convName ->
-                                openConversationId = convId
-                                openConversationName = convName
-                            },
-                            messagesViewModel = messagesViewModel,
-                        )
-                    }
+        is AppRoute.UserProfile -> {
+            UserProfileScreen(
+                userId = currentRoute.userId,
+                onBack = { route = AppRoute.MainTabs },
+                onOpenUserProfile = { userId ->
+                    route = AppRoute.UserProfile(userId)
+                },
+                onOpenClubProfile = { clubId ->
+                    route = AppRoute.ClubProfile(clubId)
+                },
+                onOpenEventProfile = { eventId ->
+                    route = AppRoute.EventProfile(eventId)
+                },
+            )
+        }
 
-                    AppDestinations.MESSAGES -> {
-                        MessagesScreen(
-                            onOpenConversation = { convId, friendName ->
-                                val convo =
-                                    messagesViewModel.conversations.value
-                                        .find { it.conversationId == convId }
-                                openConversationName =
-                                    if (convo?.isGroup == true) {
-                                        convo.groupName
-                                    } else {
-                                        val otherUserId =
-                                            convo
-                                                ?.members
-                                                ?.firstOrNull { it != messagesViewModel.currentUserId }
+        is AppRoute.ClubProfile -> {
+            ClubProfileScreen(
+                clubId = currentRoute.clubId,
+                isMember = true,
+                onBack = { route = AppRoute.MainTabs },
+                onJoinClub = { /* Handle join club logic */ },
+                onLeaveClub = { /* Handle leave club logic */ },
+                onViewEvents = { /* Handle view events logic */ },
+                onOpenUserProfile = { userId ->
+                    route = AppRoute.UserProfile(userId)
+                },
+                onOpenClubProfile = { clubId ->
+                    route = AppRoute.ClubProfile(clubId)
+                },
+                onOpenEventProfile = { eventId ->
+                    route = AppRoute.EventProfile(eventId)
+                },
+            )
+        }
 
-                                        convo?.memberNames?.get(otherUserId) ?: "Chat"
-                                    }
-
-                                openConversationId = convId
-                            },
-                            viewModel = messagesViewModel,
-                        )
-                    }
-
-                    AppDestinations.PROFILE -> {
-                        ProfileScreen(onSignOut = onSignOut)
-                    }
-
-                    AppDestinations.EVENTS -> {
-                        EventsScreen()
-                    }
-                }
-
-                HelpfulLinksMenuButton(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(start = 8.dp, top = 8.dp),
-                )
-            }
+        is AppRoute.EventProfile -> {
+            EventProfileScreen(
+                eventId = currentRoute.eventId,
+                onBack = { route = AppRoute.MainTabs },
+                onOpenUserProfile = { userId ->
+                    route = AppRoute.UserProfile(userId)
+                },
+                onOpenClubProfile = { clubId ->
+                    route = AppRoute.ClubProfile(clubId)
+                },
+                onOpenEventProfile = { eventId ->
+                    route = AppRoute.EventProfile(eventId)
+                },
+            )
         }
     }
 }

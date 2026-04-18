@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.rippleci.data.AppRoute
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toFriendRequest
@@ -33,6 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun FriendsScreen(
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
+    onOpenUserProfile: (String) -> Unit = {},
     messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
@@ -154,6 +156,9 @@ fun FriendsScreen(
                                     user = user,
                                     isFriend = true,
                                     isPending = false,
+                                    onViewProfile = {
+                                        onOpenUserProfile(user.id)
+                                    },
                                     onAddFriend = {},
                                     onRemoveFriend = {
                                         db
@@ -310,6 +315,10 @@ fun FriendsScreen(
                                                 result.documents
                                                     .filter { doc ->
                                                         if (doc.id == currentUserId) return@filter false
+                                                        val name = (doc.getString("name") ?: "").lowercase()
+                                                        val nameMatch = name.contains(query)
+                                                        val email = (doc.getString("email") ?: "").lowercase()
+                                                        val emailMatch = email.contains(query)
                                                         val major = (doc.getString("major") ?: "").lowercase()
                                                         val majorMatch = major.contains(query)
                                                         val clubMatch =
@@ -318,7 +327,7 @@ fun FriendsScreen(
                                                         val classMatch =
                                                             (doc.get("classes") as? List<*>)
                                                                 ?.any { it.toString().lowercase() == query } ?: false
-                                                        majorMatch || clubMatch || classMatch
+                                                        majorMatch || clubMatch || classMatch || nameMatch || emailMatch
                                                     }.map { doc -> doc.toUserProfile() }
                                             isSearching = false
                                         }.addOnFailureListener { isSearching = false }
@@ -340,13 +349,14 @@ fun FriendsScreen(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
                             searchResults.forEach { user ->
-                                val user = user
-
                                 val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
                                 StudentCard(
                                     user = user,
                                     isFriend = friendIds.contains(user.id),
                                     isPending = pendingRequestIds.contains(user.id),
+                                    onViewProfile = {
+                                        onOpenUserProfile(user.id)
+                                    },
                                     onAddFriend = {
                                         currentUserId?.let { uid ->
                                             val request =
