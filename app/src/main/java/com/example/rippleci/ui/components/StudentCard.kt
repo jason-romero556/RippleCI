@@ -27,6 +27,7 @@ fun StudentCard(
     user: UserProfile,
     isFriend: Boolean,
     isPending: Boolean,
+    onViewProfile: (() -> Unit)? = null,
     onAddFriend: () -> Unit,
     onRemoveFriend: () -> Unit,
     onMessage: (() -> Unit)? = null,
@@ -103,6 +104,16 @@ fun StudentCard(
             InfoRow("Major", user.major.ifBlank { "Not set" })
             InfoRow("Clubs", clubsText)
             InfoRow("Classes", classesText)
+
+            if (onViewProfile != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onViewProfile,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("View Profile")
+                }
+            }
 
             if (isFriend && onMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
