@@ -3,6 +3,10 @@ package com.example.rippleci.ui.events
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.ui.components.EventCard
-import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.screens.CollapsibleSection
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
@@ -36,7 +39,7 @@ fun EventsScreen(
     val userId = auth.currentUser?.uid
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isPersonalExpanded by remember { mutableStateOf(true) }
-    var isSchoolExpanded by remember { mutableStateOf(true) }
+    var isSchoolExpanded by remember { mutableStateOf(false) }
     var isCreatingEvent by remember { mutableStateOf(false) }
 
     LaunchedEffect(userId) {
@@ -63,128 +66,128 @@ fun EventsScreen(
         }
     }
 
-    if (isCreatingEvent) {
-        CreatePersonalEventScreen(
-            onSave = { newEvent ->
-                userId?.let { uid ->
-                    val eventData =
-                        mapOf(
-                            "title" to newEvent.title,
-                            "description" to newEvent.description,
-                            "location" to newEvent.location,
-                            "date" to newEvent.date,
-                            "startTime" to newEvent.startTime,
-                            "endTime" to newEvent.endTime,
-                        )
+    Box(modifier = modifier.fillMaxSize()) {
+        if (isCreatingEvent) {
+            CreatePersonalEventScreen(
+                onSave = { newEvent ->
+                    userId?.let { uid ->
+                        val eventData =
+                            mapOf(
+                                "title" to newEvent.title,
+                                "description" to newEvent.description,
+                                "location" to newEvent.location,
+                                "date" to newEvent.date,
+                                "startTime" to newEvent.startTime,
+                                "endTime" to newEvent.endTime,
+                            )
 
-                    db
-                        .collection("users")
-                        .document(uid)
-                        .collection("personalEvents")
-                        .add(eventData)
-                        .addOnSuccessListener { docRef ->
-                            personalEvents = personalEvents + newEvent.copy(id = docRef.id)
-                            isCreatingEvent = false
-                        }
-                }
-            },
-            onCancel = {
-                isCreatingEvent = false
-            },
-        )
-    } else {
-        val uiState by viewModel.uiState.collectAsState()
-
-        Column(modifier = modifier.fillMaxSize()) {
-            Text(
-                text = "Upcoming Events",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(
-                    start = helpfulLinksMenuTitleStartPadding,
-                    top = 16.dp,
-                    end = 16.dp,
-                    bottom = 16.dp,
-                ),
+                        db
+                            .collection("users")
+                            .document(uid)
+                            .collection("personalEvents")
+                            .add(eventData)
+                            .addOnSuccessListener { docRef ->
+                                personalEvents = personalEvents + newEvent.copy(id = docRef.id)
+                                isCreatingEvent = false
+                            }
+                    }
+                },
+                onCancel = {
+                    isCreatingEvent = false
+                },
             )
+        } else {
+            val uiState by viewModel.uiState.collectAsState()
 
-            CollapsibleSection(
-                title = "My Events",
-                expanded = isPersonalExpanded,
-                onToggle = { isPersonalExpanded = !isPersonalExpanded },
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
             ) {
-                Button(
-                    onClick = { isCreatingEvent = true },
-                    modifier = Modifier.fillMaxWidth(),
+                CollapsibleSection(
+                    title = "My Events",
+                    expanded = isPersonalExpanded,
+                    onToggle = { isPersonalExpanded = !isPersonalExpanded },
                 ) {
-                    Text("Add Event")
+                    if (personalEvents.isEmpty()) {
+                        Text(
+                            text = "No personal events yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        personalEvents.forEach { event ->
+                            PersonalEventCard(event)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                CollapsibleSection(
+                    title = "School Events",
+                    expanded = isSchoolExpanded,
+                    onToggle = { isSchoolExpanded = !isSchoolExpanded },
+                ) {
+                    when (val state = uiState) {
+                        is EventsUiState.Loading -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
 
-                if (personalEvents.isEmpty()) {
-                    Text("No personal events yet.")
-                } else {
-                    personalEvents.forEach { event ->
-                        PersonalEventCard(event)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        is EventsUiState.Error -> {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Error: ${state.message}",
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(onClick = { viewModel.fetchEvents() }) {
+                                        Text("Retry")
+                                    }
+                                }
+                            }
+                        }
+
+                        is EventsUiState.Success -> {
+                            if (state.events.isEmpty()) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(text = "No upcoming events found.")
+                                }
+                            } else {
+                                state.events.forEach { event ->
+                                    EventCard(event = event)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }
+        }
 
-            CollapsibleSection(
-                title = "School Events",
-                expanded = isSchoolExpanded,
-                onToggle = { isSchoolExpanded = !isSchoolExpanded },
+        if (!isCreatingEvent) {
+            LargeFloatingActionButton(
+                onClick = { isCreatingEvent = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
-                when (val state = uiState) {
-                    is EventsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-
-                    is EventsUiState.Error -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Error: ${state.message}",
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { viewModel.fetchEvents() }) {
-                                    Text("Retry")
-                                }
-                            }
-                        }
-                    }
-
-                    is EventsUiState.Success -> {
-                        if (state.events.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(text = "No upcoming events found.")
-                            }
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                items(state.events) { event ->
-                                    EventCard(event = event)
-                                }
-                            }
-                        }
-                    }
-                }
+                Icon(Icons.Default.Add, contentDescription = "Add Event")
             }
         }
     }

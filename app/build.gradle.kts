@@ -41,6 +41,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -51,6 +52,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation("io.coil-kt:coil-compose:2.5.0")
     implementation("com.google.firebase:firebase-storage")
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
@@ -67,6 +69,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.play.services.maps)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)

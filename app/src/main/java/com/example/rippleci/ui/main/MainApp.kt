@@ -3,7 +3,6 @@ package com.example.rippleci.ui.main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,15 +10,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.R
 import com.example.rippleci.data.AppRoute
 import com.example.rippleci.ui.components.HelpfulLinksMenuButton
 import com.example.rippleci.ui.events.EventsScreen
@@ -69,36 +70,46 @@ fun MainApp(onSignOut: () -> Unit) {
     ) {
         // WRAP THE CONTENT IN A COLUMN
         Column(modifier = Modifier.fillMaxSize()) {
-            // THE TOP BUFFER BOX
-            // This box now contains the hamburger menu and handles status bar padding
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 4.dp // Add a slight shadow for depth
+            // THE TOP HEADER BOX
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors =
+                                    listOf(
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                        MaterialTheme.colorScheme.surface,
+                                    ),
+                            ),
+                        ),
             ) {
                 Box(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .height(56.dp)
-                        .fillMaxWidth()
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(64.dp),
                 ) {
                     HelpfulLinksMenuButton(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 8.dp)
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 8.dp),
                     )
-                    
+
                     Text(
                         text = currentDestination.label,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.align(Alignment.Center)
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.align(Alignment.Center),
                     )
                 }
             }
 
             // 2. MAIN SCREEN CONTENT
-            // Modifier.weight(1f) ensures this takes up all remaining space
-            // without covering the bottom navigation bar.
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 when (currentDestination) {
                     AppDestinations.MAP -> {
