@@ -1,5 +1,7 @@
 package com.example.rippleci.ui.auth
 
+import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +19,16 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
     var isSignUp by remember { mutableStateOf(false) }
+
+    fun savefcmToken() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            val uid = Firebase.auth.currentUser?.uid ?: return@addOnSuccessListener
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(uid)
+                .update("fcmToken", token)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -64,11 +76,17 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                 }
                 if (isSignUp) {
                     auth.createUserWithEmailAndPassword(email, password)
-                        .addOnSuccessListener { onLoginSuccess() }
+                        .addOnSuccessListener {
+                            savefcmToken()
+                            onLoginSuccess()
+                        }
                         .addOnFailureListener { e -> errorMessage = e.message ?: "Signup failed" }
                 } else {
                     auth.signInWithEmailAndPassword(email, password)
-                        .addOnSuccessListener { onLoginSuccess() }
+                        .addOnSuccessListener {
+                            savefcmToken()
+                            onLoginSuccess()
+                        }
                         .addOnFailureListener { e -> errorMessage = e.message ?: "Login failed" }
                 }
             },
