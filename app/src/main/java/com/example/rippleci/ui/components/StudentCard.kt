@@ -101,9 +101,10 @@ fun StudentCard(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            InfoRow("Major", user.major.ifBlank { "Not set" })
-            InfoRow("Clubs", clubsText)
-            InfoRow("Classes", classesText)
+
+            ProfileInfoRow("Major", user.major.ifBlank { "Not set" })
+            ProfileInfoRow("Clubs", clubsText)
+            ProfileInfoRow("Classes", classesText)
 
             if (onViewProfile != null) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -153,19 +154,5 @@ fun StudentCard(
                 },
             )
         }
-    }
-}
-
-@Composable
-private fun InfoRow(
-    label: String,
-    value: String,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, color = MaterialTheme.colorScheme.secondary)
-        Text(value)
     }
 }
