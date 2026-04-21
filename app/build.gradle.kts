@@ -60,6 +60,7 @@ dependencies {
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
     implementation("com.google.maps.android:maps-compose:4.4.1") // Added by Sameen
     implementation("com.google.accompanist:accompanist-permissions:0.34.0") // Added by Sameen
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

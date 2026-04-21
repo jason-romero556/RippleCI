@@ -85,8 +85,8 @@ fun MapScreen() {
     var plannerExpanded by rememberSaveable { mutableStateOf(true) }
     var routePanelCollapsed by rememberSaveable { mutableStateOf(false) }
     var selectedLocationId by rememberSaveable { mutableStateOf<String?>(null) }
-    var routeStartId by rememberSaveable { mutableStateOf(campusSites.firstOrNull()?.id) }
-    var routeEndId by rememberSaveable { mutableStateOf(campusSites.getOrNull(1)?.id) }
+    var routeStartId by rememberSaveable { mutableStateOf<String?>(null) }
+    var routeEndId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val selectedLocation = campusSites.find { it.id == selectedLocationId }
     val routeStart = campusSites.find { it.id == routeStartId }
@@ -233,14 +233,15 @@ fun MapScreen() {
                 cameraPositionState = cameraPositionState,
                 properties =
                     MapProperties(
-                        isMyLocationEnabled = locationPermissionState.status.isGranted,
+                        isMyLocationEnabled = false,
                         mapType = if (mapStyle == CampusMapStyle.OSM) MapType.NONE else MapType.NORMAL,
+                        maxZoomPreference = if (mapStyle == CampusMapStyle.OSM) 19f else 21f,
                     ),
                 uiSettings =
                     MapUiSettings(
                         compassEnabled = true,
-                        zoomControlsEnabled = false,
-                        myLocationButtonEnabled = locationPermissionState.status.isGranted,
+                        zoomControlsEnabled = true,
+                        myLocationButtonEnabled = false,
                         mapToolbarEnabled = false,
                     ),
             ) {
