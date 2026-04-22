@@ -20,6 +20,8 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.AppRoute
@@ -71,8 +73,17 @@ fun MainApp(onSignOut: () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    ),
+                color = Color.Transparent,
                 shadowElevation = 4.dp, // Add a slight shadow for depth
             ) {
                 Box(
