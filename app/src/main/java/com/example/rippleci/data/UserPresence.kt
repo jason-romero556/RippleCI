@@ -45,8 +45,8 @@ object UserPresence {
     fun statusLabel(status: String): String =
         when (status) {
             ONLINE -> "Online"
-            MINIMIZED -> "Minimized"
-            else -> "App closed"
+            MINIMIZED -> "Idle"
+            else -> "Offline"
         }
 
     fun update(userId: String, status: String) {
