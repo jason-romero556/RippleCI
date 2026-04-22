@@ -15,12 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.text.HtmlCompat
-import coil.compose.AsyncImage
-import com.example.rippleci.data.models.SchoolEvent
 import com.example.rippleci.data.models.UserProfile
+import coil.compose.AsyncImage
 
 @Composable
 fun StudentCard(
@@ -70,7 +67,11 @@ fun StudentCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(user.name.ifBlank { "Unknown" }, style = MaterialTheme.typography.titleMedium)
 
+                    Spacer(modifier = Modifier.height(4.dp))
+                    UserPresenceIndicator(user = user)
+
                     if (user.bio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = user.bio,
                             style = MaterialTheme.typography.bodySmall,

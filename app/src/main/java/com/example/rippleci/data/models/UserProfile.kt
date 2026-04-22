@@ -12,4 +12,6 @@ data class UserProfile(
     val friendIds: List<String> = emptyList(),
     val profilePictureUrl: String = "",
     val visibility: String = "public",
+    val presenceStatus: String = "closed",
+    val presenceUpdatedAt: Long = 0L,
 )
