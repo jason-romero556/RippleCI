@@ -217,7 +217,11 @@ captures/
 
 .DS_Store
 Thumbs.db
-
+# ----------------------------
+# Agent Files
+# ----------------------------
+.agents/
+skills-lock.json
 # ----------------------------
 # Firebase (optional)
 # Comment out if you want to commit it

@@ -21,8 +21,8 @@ exports.sendMessageNotification = onDocumentCreated(
         .get();
 
       const senderData = senderDoc.data();
-      const senderName = senderData && senderData.displayName
-        ? senderData.displayName
+      const senderName = senderData && senderData.name
+        ? senderData.name
         : "Someone";
 
       // Get conversation participants
@@ -32,8 +32,8 @@ exports.sendMessageNotification = onDocumentCreated(
         .get();
 
       const convData = convDoc.data();
-      const participants = convData && convData.participants
-        ? convData.participants
+      const participants = convData && convData.members
+        ? convData.members
         : [];
 
       // Send to everyone except sender
