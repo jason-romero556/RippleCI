@@ -19,15 +19,19 @@ import com.example.rippleci.data.Conversation
 @Composable
 fun MessagesScreen(
     onOpenConversation: (String, String) -> Unit,
-    viewModel: MessagesViewModel
+    onOpenUserProfile: (String) -> Unit,
+    onOpenClubProfile: (String) -> Unit,
+    onOpenEventProfile: (String) -> Unit,
+    viewModel: MessagesViewModel,
 ) {
     val conversations by viewModel.conversations.collectAsState()
     android.util.Log.d("MSG_DEBUG", "MessagesScreen currentUserId: ${viewModel.currentUserId}")
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
     ) {
         Spacer(modifier = Modifier.height(32.dp))
         Text("Messages", style = MaterialTheme.typography.headlineMedium)
@@ -38,7 +42,7 @@ fun MessagesScreen(
                 Text(
                     "No conversations yet.\nMessage a friend from the Friends tab!",
                     color = MaterialTheme.colorScheme.secondary,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
         } else {
@@ -47,7 +51,7 @@ fun MessagesScreen(
                     ConversationItem(
                         conversation = convo,
                         currentUserId = viewModel.currentUserId,
-                        onClick = { onOpenConversation(convo.conversationId, convo.groupName) }
+                        onClick = { onOpenConversation(convo.conversationId, convo.groupName) },
                     )
                 }
             }
@@ -59,39 +63,46 @@ fun MessagesScreen(
 fun ConversationItem(
     conversation: Conversation,
     currentUserId: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
-    val displayName = if (conversation.isGroup) {
-        conversation.groupName
-    } else {
-        val otherUserId = conversation.members.firstOrNull { it != currentUserId }
+    val displayName =
+        if (conversation.isGroup) {
+            conversation.groupName
+        } else {
+            val otherUserId = conversation.members.firstOrNull { it != currentUserId }
 
-        android.util.Log.d("MSG_DEBUG", "currentUserId: $currentUserId")
-        android.util.Log.d("MSG_DEBUG", "members: ${conversation.members}")
-        android.util.Log.d("MSG_DEBUG", "memberNames: ${conversation.memberNames}")
-        android.util.Log.d("MSG_DEBUG", "otherUserId: $otherUserId")
+            android.util.Log.d("MSG_DEBUG", "currentUserId: $currentUserId")
+            android.util.Log.d("MSG_DEBUG", "members: ${conversation.members}")
+            android.util.Log.d("MSG_DEBUG", "memberNames: ${conversation.memberNames}")
+            android.util.Log.d("MSG_DEBUG", "otherUserId: $otherUserId")
 
-        conversation.memberNames[otherUserId] ?: "Unknown"
-    }
+            conversation.memberNames[otherUserId] ?: "Unknown"
+        }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = if (conversation.isGroup)
-                    Icons.Default.Person else Icons.Default.AccountCircle,
+                imageVector =
+                    if (conversation.isGroup) {
+                        Icons.Default.Person
+                    } else {
+                        Icons.Default.AccountCircle
+                    },
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.secondary
+                tint = MaterialTheme.colorScheme.secondary,
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -100,10 +111,9 @@ fun ConversationItem(
                     text = conversation.lastMessage.ifEmpty { "No messages yet" },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary,
-                    maxLines = 1
+                    maxLines = 1,
                 )
             }
         }
     }
 }
-

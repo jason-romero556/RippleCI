@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.ui.components.EventCard
+import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.screens.CollapsibleSection
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
@@ -99,7 +100,12 @@ fun EventsScreen(
                 text = "Upcoming Events",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(
+                    start = helpfulLinksMenuTitleStartPadding,
+                    top = 16.dp,
+                    end = 16.dp,
+                    bottom = 16.dp,
+                ),
             )
 
             CollapsibleSection(

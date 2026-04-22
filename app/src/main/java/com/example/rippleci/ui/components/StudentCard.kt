@@ -15,25 +15,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.text.HtmlCompat
-import coil.compose.AsyncImage
-import com.example.rippleci.data.models.SchoolEvent
 import com.example.rippleci.data.models.UserProfile
+import coil.compose.AsyncImage
 
 @Composable
 fun StudentCard(
     user: UserProfile,
     isFriend: Boolean,
     isPending: Boolean,
+    onViewProfile: (() -> Unit)? = null,
     onAddFriend: () -> Unit,
     onRemoveFriend: () -> Unit,
+    onMessage: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    actionContent: (@Composable () -> Unit)? = null,
 ) {
-    val clubsText = user.clubs.joinToString(", ").ifBlank { "None" }
+    val clubsText = user.clubIds.joinToString(", ").ifBlank { "None" }
     val classesText = user.classes.joinToString(", ").ifBlank { "None" }
+    var showRemoveDialog by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -68,7 +67,11 @@ fun StudentCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(user.name.ifBlank { "Unknown" }, style = MaterialTheme.typography.titleMedium)
 
+                    Spacer(modifier = Modifier.height(4.dp))
+                    UserPresenceIndicator(user = user)
+
                     if (user.bio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = user.bio,
                             style = MaterialTheme.typography.bodySmall,
@@ -77,49 +80,80 @@ fun StudentCard(
                     }
                 }
 
-                if (actionContent != null) {
-                    actionContent()
-                } else {
-                    when {
-                        isFriend -> {
-                            OutlinedButton(onClick = onRemoveFriend) {
-                                Text("Friends")
-                            }
+                when {
+                    isFriend -> {
+                        OutlinedButton(onClick = { showRemoveDialog = true }) {
+                            Text("Friends")
                         }
+                    }
 
-                        isPending -> {
-                            OutlinedButton(onClick = {}, enabled = false) {
-                                Text("Pending")
-                            }
+                    isPending -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("Pending")
                         }
+                    }
 
-                        else -> {
-                            Button(onClick = onAddFriend) {
-                                Text("Add")
-                            }
+                    else -> {
+                        Button(onClick = onAddFriend) {
+                            Text("Add")
                         }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            InfoRow("Major", user.major.ifBlank { "Not set" })
-            InfoRow("Clubs", clubsText)
-            InfoRow("Classes", classesText)
-        }
-    }
-}
 
-@Composable
-private fun InfoRow(
-    label: String,
-    value: String,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, color = MaterialTheme.colorScheme.secondary)
-        Text(value)
+            ProfileInfoRow("Major", user.major.ifBlank { "Not set" })
+            ProfileInfoRow("Clubs", clubsText)
+            ProfileInfoRow("Classes", classesText)
+
+            if (onViewProfile != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onViewProfile,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("View Profile")
+                }
+            }
+
+            if (isFriend && onMessage != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onMessage,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Message")
+                }
+            }
+        }
+        if (showRemoveDialog) {
+            AlertDialog(
+                onDismissRequest = { showRemoveDialog = false },
+                title = { Text("Remove Friend") },
+                text = {
+                    Text("Are you sure you want to remove ${user.name.ifBlank { "this user" }} as a friend?")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onRemoveFriend()
+                            showRemoveDialog = false
+                        },
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                            ),
+                    ) {
+                        Text("Remove")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showRemoveDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
     }
 }

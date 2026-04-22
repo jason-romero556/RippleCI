@@ -18,7 +18,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.rippleci.data.AppRoute
+import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.UserProfile
+import com.example.rippleci.data.toFriendRequest
+import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ProfileInfoRow
+import com.example.rippleci.ui.components.StudentCard
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
@@ -28,6 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun FriendsScreen(
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
+    onOpenUserProfile: (String) -> Unit = {},
     messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
@@ -36,11 +43,11 @@ fun FriendsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var incomingRequests by remember { mutableStateOf<List<Pair<String, Map<String, Any>>>>(emptyList()) }
+    var incomingRequests by remember { mutableStateOf<List<FriendRequest>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<Pair<String, Map<String, Any>>>>(emptyList()) }
+    var searchResults by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var friendIds by remember { mutableStateOf<List<String>>(emptyList()) }
-    var friendProfiles by remember { mutableStateOf<List<Pair<String, Map<String, Any>>>>(emptyList()) }
+    var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
@@ -63,9 +70,7 @@ fun FriendsScreen(
                             .get()
                             .addOnSuccessListener { result ->
                                 friendProfiles =
-                                    result.documents.map { d ->
-                                        Pair(d.id, d.data ?: emptyMap())
-                                    }
+                                    result.documents.map { it.toUserProfile() }
                             }
                     } else {
                         friendProfiles = emptyList()
@@ -89,7 +94,7 @@ fun FriendsScreen(
                 .addSnapshotListener { snapshot, _ ->
                     val requests =
                         snapshot?.documents?.map { doc ->
-                            Pair(doc.id, doc.data ?: emptyMap())
+                            doc.toFriendRequest()
                         } ?: emptyList()
                     incomingRequests = requests
                 }
@@ -99,7 +104,7 @@ fun FriendsScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
         Column(
             modifier =
@@ -107,19 +112,6 @@ fun FriendsScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
         ) {
-            // Screen Header that lines up with the top buffer
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                Text(
-                    text = "Friends",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-
             Spacer(modifier = Modifier.height(8.dp))
 
             TabRow(selectedTabIndex = selectedTab) {
@@ -159,38 +151,30 @@ fun FriendsScreen(
                         Column(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
-                            friendProfiles.filter { (friendId, _) -> friendId != currentUserId }.forEach { (friendId, user) ->
-                                val friendName =
-                                    user["name"] as? String
-                                        ?: user["email"] as? String
-                                        ?: "Unknown"
+                            friendProfiles.filter { user -> user.id != currentUserId }.forEach { user ->
                                 StudentCard(
-                                    userId = friendId,
                                     user = user,
                                     isFriend = true,
                                     isPending = false,
+                                    onViewProfile = {
+                                        onOpenUserProfile(user.id)
+                                    },
                                     onAddFriend = {},
                                     onRemoveFriend = {
-                                        currentUserId?.let { uid ->
-                                            db
-                                                .collection("users")
-                                                .document(uid)
-                                                .update(
-                                                    "friends",
-                                                    com.google.firebase.firestore.FieldValue
-                                                        .arrayRemove(friendId),
-                                                )
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("$friendName removed from friends")
-                                            }
-                                        }
+                                        db
+                                            .collection("users")
+                                            .document(currentUserId)
+                                            .update(
+                                                "friends",
+                                                com.google.firebase.firestore.FieldValue
+                                                    .arrayRemove(user.id),
+                                            )
                                     },
                                     onMessage = {
-                                        android.util.Log.d("MSG_DEBUG", "currentUserId: ${messagesViewModel.currentUserId}")
-                                        android.util.Log.d("MSG_DEBUG", "otherUserId: $friendId")
-                                        android.util.Log.d("MSG_DEBUG", "otherUserName: $friendName")
+                                        val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
+
                                         messagesViewModel.getOrCreateDMConversation(
-                                            otherUserId = friendId,
+                                            otherUserId = user.id,
                                             otherUserName = friendName,
                                         ) { convId ->
                                             onOpenConversation(convId, friendName)
@@ -218,9 +202,9 @@ fun FriendsScreen(
                         Column(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
-                            incomingRequests.forEach { (requestId, request) ->
-                                val fromUserId = request["fromUserId"] as? String ?: ""
-                                val fromUserName = request["fromUserName"] as? String ?: "Unknown"
+                            incomingRequests.forEach { request ->
+                                val fromUserId = request.fromUserId
+                                val fromUserName = request.fromUserName
 
                                 Card(
                                     modifier =
@@ -264,7 +248,7 @@ fun FriendsScreen(
                                                     val requestRef =
                                                         db
                                                             .collection("friendRequests")
-                                                            .document(requestId)
+                                                            .document(request.id)
                                                     batch.update(requestRef, "status", "accepted")
                                                     val currentUserRef =
                                                         db
@@ -299,7 +283,7 @@ fun FriendsScreen(
                                             onClick = {
                                                 db
                                                     .collection("friendRequests")
-                                                    .document(requestId)
+                                                    .document(request.id)
                                                     .update("status", "denied")
                                             },
                                         ) {
@@ -331,6 +315,10 @@ fun FriendsScreen(
                                                 result.documents
                                                     .filter { doc ->
                                                         if (doc.id == currentUserId) return@filter false
+                                                        val name = (doc.getString("name") ?: "").lowercase()
+                                                        val nameMatch = name.contains(query)
+                                                        val email = (doc.getString("email") ?: "").lowercase()
+                                                        val emailMatch = email.contains(query)
                                                         val major = (doc.getString("major") ?: "").lowercase()
                                                         val majorMatch = major.contains(query)
                                                         val clubMatch =
@@ -339,8 +327,8 @@ fun FriendsScreen(
                                                         val classMatch =
                                                             (doc.get("classes") as? List<*>)
                                                                 ?.any { it.toString().lowercase() == query } ?: false
-                                                        majorMatch || clubMatch || classMatch
-                                                    }.map { doc -> Pair(doc.id, doc.data ?: emptyMap()) }
+                                                        majorMatch || clubMatch || classMatch || nameMatch || emailMatch
+                                                    }.map { doc -> doc.toUserProfile() }
                                             isSearching = false
                                         }.addOnFailureListener { isSearching = false }
                                 }
@@ -360,19 +348,22 @@ fun FriendsScreen(
                         Column(
                             modifier = Modifier.verticalScroll(rememberScrollState()),
                         ) {
-                            searchResults.forEach { (userId, user) ->
+                            searchResults.forEach { user ->
+                                val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
                                 StudentCard(
-                                    userId = userId,
                                     user = user,
-                                    isFriend = friendIds.contains(userId),
-                                    isPending = pendingRequestIds.contains(userId),
+                                    isFriend = friendIds.contains(user.id),
+                                    isPending = pendingRequestIds.contains(user.id),
+                                    onViewProfile = {
+                                        onOpenUserProfile(user.id)
+                                    },
                                     onAddFriend = {
                                         currentUserId?.let { uid ->
                                             val request =
                                                 hashMapOf(
                                                     "fromUserId" to uid,
                                                     "fromUserName" to (auth.currentUser?.email ?: ""),
-                                                    "toUserId" to userId,
+                                                    "toUserId" to user.id,
                                                     "status" to "pending",
                                                     "timestamp" to System.currentTimeMillis(),
                                                 )
@@ -380,21 +371,21 @@ fun FriendsScreen(
                                         }
                                     },
                                     onRemoveFriend = {
-                                        currentUserId?.let { uid ->
+                                        currentUserId.let { uid ->
                                             db
                                                 .collection("users")
                                                 .document(uid)
                                                 .update(
                                                     "friends",
-                                                    com.google.firebase.firestore.FieldValue
-                                                        .arrayRemove(userId),
+                                                    com.google.firebase.firestore.FieldValue.arrayRemove(
+                                                        user.id,
+                                                    ),
                                                 )
                                         }
                                     },
                                     onMessage = {
-                                        val friendName = user["name"] as? String ?: user["email"] as? String ?: "Unknown"
                                         messagesViewModel.getOrCreateDMConversation(
-                                            otherUserId = userId,
+                                            otherUserId = user.id,
                                             otherUserName = friendName,
                                         ) { convId ->
                                             onOpenConversation(convId, friendName)
@@ -408,131 +399,5 @@ fun FriendsScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-fun StudentCard(
-    userId: String,
-    user: Map<String, Any>,
-    isFriend: Boolean,
-    isPending: Boolean,
-    onAddFriend: () -> Unit,
-    onRemoveFriend: () -> Unit,
-    onMessage: (() -> Unit)? = null,
-) {
-    val name = user["name"] as? String ?: "Unknown"
-    val major = user["major"] as? String ?: "No major set"
-    val bio = user["bio"] as? String ?: ""
-    val clubs = (user["clubs"] as? List<*>)?.joinToString(", ") ?: "None"
-    val classes = (user["classes"] as? List<*>)?.joinToString(", ") ?: "None"
-    val profilePictureUrl = user["profilePictureUrl"] as? String ?: ""
-
-    var showRemoveDialog by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                if (profilePictureUrl.isNotEmpty()) {
-                    AsyncImage(
-                        model = profilePictureUrl,
-                        contentDescription = "Profile Picture",
-                        contentScale = ContentScale.Crop,
-                        modifier =
-                            Modifier
-                                .size(48.dp)
-                                .clip(CircleShape),
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.secondary,
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = name, style = MaterialTheme.typography.titleMedium)
-                    if (bio.isNotEmpty()) {
-                        Text(
-                            text = bio,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary,
-                        )
-                    }
-                }
-
-                when {
-                    isFriend -> {
-                        OutlinedButton(onClick = { showRemoveDialog = true }) {
-                            Text("Friends ✓")
-                        }
-                    }
-
-                    isPending -> {
-                        OutlinedButton(onClick = {}, enabled = false) {
-                            Text("Pending")
-                        }
-                    }
-
-                    else -> {
-                        Button(onClick = onAddFriend) {
-                            Text("Add")
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            ProfileInfoRow(label = "Major", value = major)
-            ProfileInfoRow(label = "Clubs", value = clubs)
-            ProfileInfoRow(label = "Classes", value = classes)
-
-            if (isFriend && onMessage != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onMessage,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Message")
-                }
-            }
-        }
-    }
-
-    if (showRemoveDialog) {
-        AlertDialog(
-            onDismissRequest = { showRemoveDialog = false },
-            title = { Text("Remove Friend") },
-            text = { Text("Are you sure you want to remove $name as a friend?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onRemoveFriend()
-                        showRemoveDialog = false
-                    },
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Text("Remove")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showRemoveDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
     }
 }
