@@ -37,6 +37,7 @@ import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.FriendListCard
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.UserLinkRow
+import com.example.rippleci.ui.components.UserPresenceIndicator
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.auth.User
 import com.google.firebase.firestore.firestore
@@ -121,6 +122,8 @@ fun UserProfileScreen(
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        UserPresenceIndicator(user = userProfile)
 
         ProfileInfoRow("Major", userProfile.major.ifBlank { "Unlisted Major" })
 

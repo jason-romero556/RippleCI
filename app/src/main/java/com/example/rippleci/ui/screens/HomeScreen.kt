@@ -1,50 +1,115 @@
 package com.example.rippleci.ui.screens
 
-import android.Manifest
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.rememberCameraPositionState
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.ui.components.EventCard
+import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.events.EventsUiState
+import com.example.rippleci.ui.events.EventsViewModel
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
+import java.text.SimpleDateFormat
+import java.util.*
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun HomeScreen() {
-    // 1. Set up the permission state
-    val locationPermissionState = rememberPermissionState(
-        Manifest.permission.ACCESS_FINE_LOCATION
-    )
+fun HomeScreen(
+    eventsViewModel: EventsViewModel = viewModel()
+) {
+    val db = Firebase.firestore
+    val auth = Firebase.auth
+    val userId = auth.currentUser?.uid
+    var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    val uiState by eventsViewModel.uiState.collectAsState()
 
-    // 2. Zoomed-in starting position (15f is street level)
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(34.1621, -119.0435), 15f)
+    // 1. Fetch Personal Events (Custom Events)
+    LaunchedEffect(userId) {
+        userId?.let { uid ->
+            db.collection("users").document(uid).collection("personalEvents")
+                .get()
+                .addOnSuccessListener { result ->
+                    personalEvents = result.documents.map { doc ->
+                        PersonalEvent(
+                            id = doc.id,
+                            title = doc.getString("title").orEmpty(),
+                            description = doc.getString("description").orEmpty(),
+                            location = doc.getString("location").orEmpty(),
+                            date = doc.getString("date").orEmpty(),
+                            startTime = doc.getString("startTime").orEmpty(),
+                            endTime = doc.getString("endTime").orEmpty(),
+                        )
+                    }
+                }
+        }
     }
 
-    if (locationPermissionState.status.isGranted) {
-        // 3. ONLY show the map with location enabled if permission is granted
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = MapProperties(isMyLocationEnabled = true),
-            uiSettings = MapUiSettings(myLocationButtonEnabled = true)
+    // 2. Helper to filter "Today's" School Events
+    val todayDateString = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // --- CUSTOM EVENTS SECTION ---
+        Text(
+            text = "My Custom Events",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
         )
-    } else {
-        // 4. Show a button to request permission if we don't have it
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-            Text("We need your location to show where you are on the map.")
-            Button(onClick = { locationPermissionState.launchPermissionRequest() }) {
-                Text("Grant Permission")
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        if (personalEvents.isEmpty()) {
+            Text("No custom events yet.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            personalEvents.forEach { event ->
+                PersonalEventCard(event = event)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // --- TODAY'S SCHOOL EVENTS SECTION ---
+        Text(
+            text = "Today's School Events",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        when (val state = uiState) {
+            is EventsUiState.Loading -> CircularProgressIndicator()
+            is EventsUiState.Error -> Text("Could not load school events.")
+            is EventsUiState.Success -> {
+                // Filter events that match today's date
+                // Note: Assuming state.events.startDateTime is in a parseable format or contains the date
+                val todaysEvents = state.events.filter { event ->
+                    event.startDateTime.contains(todayDateString)
+                }
+
+                if (todaysEvents.isEmpty()) {
+                    Text("No school events scheduled for today.", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    todaysEvents.forEach { event ->
+                        EventCard(event = event)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
             }
         }
     }
