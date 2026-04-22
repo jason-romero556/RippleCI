@@ -64,6 +64,9 @@ fun FriendListCard(
                         style = MaterialTheme.typography.titleMedium,
                     )
 
+                    Spacer(modifier = Modifier.height(4.dp))
+                    UserPresenceIndicator(user = user)
+
                     if (user.bio.isNotBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
