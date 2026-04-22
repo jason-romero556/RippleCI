@@ -24,25 +24,16 @@ class RippleCIMessagingService : FirebaseMessagingService() {
     }
 
     private fun showNotification(title: String, body: String) {
-        val channelId = "messages_channel_v2"
+        val channelId = "messages_channel"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            val channel = NotificationChannel(
-                channelId,
-                "Messages",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                setSound(
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                        .build()
-                )
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
+        // Create channel (required for Android 8+)
+        val channel = NotificationChannel(
+            channelId,
+            "Messages",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+        notificationManager.createNotificationChannel(channel)
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
@@ -68,5 +59,4 @@ class RippleCIMessagingService : FirebaseMessagingService() {
             .document(uid)
             .update("fcmToken", token)
     }
-
 }
