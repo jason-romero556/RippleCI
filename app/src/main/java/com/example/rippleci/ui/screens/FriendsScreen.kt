@@ -20,11 +20,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.rippleci.data.AppRoute
 import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toFriendRequest
+import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
+import com.example.rippleci.ui.components.GroupVisibilityOptions
 import com.example.rippleci.ui.components.ProfileInfoRow
 import com.example.rippleci.ui.components.StudentCard
+import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
@@ -51,6 +55,11 @@ fun FriendsScreen(
     var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
+    var userGroups by remember { mutableStateOf<List<UserGroupProfile>>(emptyList()) }
+    var showCreateGroupDialog by remember { mutableStateOf(false) }
+    var groupName by remember { mutableStateOf("") }
+    var groupDescription by remember { mutableStateOf("") }
+    var groupVisibility by remember { mutableStateOf("public") }
 
     LaunchedEffect(currentUserId) {
         currentUserId?.let { uid ->
@@ -98,7 +107,88 @@ fun FriendsScreen(
                         } ?: emptyList()
                     incomingRequests = requests
                 }
+
+            db
+                .collection("userGroups")
+                .whereArrayContains("memberIds", uid)
+                .addSnapshotListener { snapshot, _ ->
+                    userGroups = snapshot?.documents?.map { it.toUserGroupProfile() } ?: emptyList()
+                }
         }
+    }
+
+    fun createGroup() {
+        val uid = currentUserId
+        if (uid.isBlank() || groupName.isBlank()) return
+
+        val groupData =
+            mapOf(
+                "name" to groupName.trim(),
+                "description" to groupDescription.trim(),
+                "ownerUserId" to uid,
+                "memberIds" to listOf(uid),
+                "adminIds" to listOf(uid),
+                "visibility" to groupVisibility,
+                "createdAt" to System.currentTimeMillis(),
+            )
+
+        db
+            .collection("userGroups")
+            .add(groupData)
+            .addOnSuccessListener {
+                groupName = ""
+                groupDescription = ""
+                groupVisibility = "public"
+                showCreateGroupDialog = false
+            }
+    }
+
+    if (showCreateGroupDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateGroupDialog = false },
+            title = { Text("Create Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = { groupName = it },
+                        label = { Text("Group name") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = groupDescription,
+                        onValueChange = { groupDescription = it },
+                        label = { Text("Description") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    VisibilitySelector(
+                        title = "Group Visibility",
+                        selectedValue = groupVisibility,
+                        options = GroupVisibilityOptions,
+                        onValueChange = { groupVisibility = it },
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { createGroup() },
+                    enabled = groupName.isNotBlank(),
+                ) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showCreateGroupDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     Scaffold(
@@ -124,6 +214,11 @@ fun FriendsScreen(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     text = { Text("Requests (${incomingRequests.size})") },
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = { Text("Groups (${userGroups.size})") },
                 )
                 Tab(
                     selected = selectedTab == 2,
@@ -297,6 +392,44 @@ fun FriendsScreen(
                 }
 
                 2 -> {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                    ) {
+                        Button(
+                            onClick = { showCreateGroupDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Create Group")
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (userGroups.isEmpty()) {
+                            Text("No groups yet.")
+                        } else {
+                            userGroups.forEach { group ->
+                                Card(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(group.name, style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            group.description.ifBlank { "No description yet." },
+                                            color = MaterialTheme.colorScheme.secondary,
+                                        )
+                                        Text("${group.memberIds.size} members")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                3 -> {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },

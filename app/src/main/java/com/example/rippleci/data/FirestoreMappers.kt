@@ -6,6 +6,7 @@ import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.SchoolEvent
+import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.google.firebase.firestore.DocumentSnapshot
 
@@ -93,4 +94,15 @@ fun DocumentSnapshot.toClubEvent(): ClubEvent =
         endTime = getString("endDateTime").orEmpty(),
         date = getString("date").orEmpty(),
         permaLinkUrl = getString("permaLinkUrl").orEmpty(),
+    )
+
+fun DocumentSnapshot.toUserGroupProfile(): UserGroupProfile =
+    UserGroupProfile(
+        id = id,
+        name = getString("name").orEmpty(),
+        description = getString("description").orEmpty(),
+        ownerUserId = getString("ownerUserId").orEmpty(),
+        memberIds = (get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        adminIds = (get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        visibility = getString("visibility") ?: "public",
     )
