@@ -2,6 +2,7 @@ package com.example.rippleci.data
 
 import com.example.rippleci.data.models.ClubEvent
 import com.example.rippleci.data.models.ClubProfile
+import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.SchoolEvent
@@ -42,6 +43,7 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
         date = getString("date").orEmpty(),
         startTime = getString("startTime").orEmpty(),
         endTime = getString("endTime").orEmpty(),
+        ownerUserId = getString("ownerUserId").orEmpty(),
     )
 
 fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
@@ -54,6 +56,18 @@ fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
         endDateTime = getString("endDateTime").orEmpty(),
         dateTimeFormatted = getString("dateTimeFormatted").orEmpty(),
         permaLinkUrl = getString("permaLinkURL").orEmpty(),
+    )
+
+fun DocumentSnapshot.toEventInvite(): EventInvite =
+    EventInvite(
+        id = id,
+        eventId = getString("eventId").orEmpty(),
+        ownerUserId = getString("ownerUserId").orEmpty(),
+        fromUserId = getString("fromUserId").orEmpty(),
+        toUserId = getString("toUserId").orEmpty(),
+        eventTitle = getString("eventTitle").orEmpty(),
+        status = getString("status") ?: "pending",
+        createdAt = getLong("createdAt") ?: 0L,
     )
 
 fun DocumentSnapshot.toClubProfile(): ClubProfile =

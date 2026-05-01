@@ -35,6 +35,7 @@ import com.google.firebase.firestore.firestore
 @Composable
 fun EventProfileScreen(
     eventId: String,
+    ownerUserId: String,
     onBack: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
     onOpenClubProfile: (String) -> Unit,
@@ -45,6 +46,7 @@ fun EventProfileScreen(
         Firebase.auth.currentUser
             ?.uid
             .orEmpty()
+    val eventOwnerUserId = ownerUserId.ifBlank { currentUserId }
 
     var ownerUserId by remember { mutableStateOf("") }
     var attendeeIds by remember { mutableStateOf(emptyList<String>()) }
@@ -65,7 +67,7 @@ fun EventProfileScreen(
 
         db
             .collection("users")
-            .document(currentUserId)
+            .document(eventOwnerUserId)
             .collection("personalEvents")
             .document(eventId)
             .get()

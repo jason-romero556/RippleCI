@@ -13,6 +13,7 @@ sealed class AppRoute {
 
     data class EventProfile(
         val eventId: String,
+        val ownerUserId: String = "",
     ) : AppRoute()
 
     data class Conversation(

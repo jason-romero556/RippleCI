@@ -169,8 +169,12 @@ fun MainApp(onSignOut: () -> Unit) {
 
                             AppDestinations.EVENTS -> {
                                 EventsScreen(
-                                    onOpenEventProfile = { eventId ->
-                                        route = AppRoute.EventProfile(eventId)
+                                    onOpenEventProfile = { ownerUserId, eventId ->
+                                        route =
+                                            AppRoute.EventProfile(
+                                                eventId,
+                                                ownerUserId,
+                                            )
                                     },
                                 )
                             }
@@ -226,6 +230,7 @@ fun MainApp(onSignOut: () -> Unit) {
                 is AppRoute.EventProfile -> {
                     EventProfileScreen(
                         eventId = currentRoute.eventId,
+                        ownerUserId = currentRoute.ownerUserId,
                         onBack = { route = AppRoute.MainTabs },
                         onOpenUserProfile = { userId ->
                             route = AppRoute.UserProfile(userId)
