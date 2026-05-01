@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.ui.components.EventCard
-import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.screens.CollapsibleSection
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
 import com.google.firebase.Firebase
@@ -30,6 +30,7 @@ import com.google.firebase.firestore.firestore
 fun EventsScreen(
     modifier: Modifier = Modifier,
     viewModel: EventsViewModel = viewModel(),
+    onOpenEventProfile: (String) -> Unit = {},
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -75,6 +76,9 @@ fun EventsScreen(
                             "date" to newEvent.date,
                             "startTime" to newEvent.startTime,
                             "endTime" to newEvent.endTime,
+                            "ownerUserId" to uid,
+                            "attendeeIds" to listOf(uid),
+                            "invitedUserIds" to emptyList<String>(),
                         )
 
                     db
@@ -100,12 +104,13 @@ fun EventsScreen(
                 text = "Upcoming Events",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(
-                    start = helpfulLinksMenuTitleStartPadding,
-                    top = 16.dp,
-                    end = 16.dp,
-                    bottom = 16.dp,
-                ),
+                modifier =
+                    Modifier.padding(
+                        start = helpfulLinksMenuTitleStartPadding,
+                        top = 16.dp,
+                        end = 16.dp,
+                        bottom = 16.dp,
+                    ),
             )
 
             CollapsibleSection(
@@ -126,7 +131,10 @@ fun EventsScreen(
                     Text("No personal events yet.")
                 } else {
                     personalEvents.forEach { event ->
-                        PersonalEventCard(event)
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(event.id) },
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }

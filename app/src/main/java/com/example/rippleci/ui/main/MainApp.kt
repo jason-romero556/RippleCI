@@ -73,16 +73,19 @@ fun MainApp(onSignOut: () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.surface
-                            )
-                        )
-                    ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush =
+                                Brush.verticalGradient(
+                                    colors =
+                                        listOf(
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                            MaterialTheme.colorScheme.surface,
+                                        ),
+                                ),
+                        ),
                 color = Color.Transparent,
                 shadowElevation = 4.dp, // Add a slight shadow for depth
             ) {
@@ -165,7 +168,11 @@ fun MainApp(onSignOut: () -> Unit) {
                             }
 
                             AppDestinations.EVENTS -> {
-                                EventsScreen()
+                                EventsScreen(
+                                    onOpenEventProfile = { eventId ->
+                                        route = AppRoute.EventProfile(eventId)
+                                    },
+                                )
                             }
                         }
                     }
