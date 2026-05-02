@@ -163,6 +163,7 @@ fun EventsScreen(
                             "ownerUserId" to uid,
                             "attendeeIds" to listOf(uid),
                             "invitedUserIds" to emptyList<String>(),
+                            "visibility" to newEvent.visibility,
                         )
 
                     db

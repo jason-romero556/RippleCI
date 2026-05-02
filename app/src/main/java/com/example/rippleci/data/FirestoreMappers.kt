@@ -6,6 +6,7 @@ import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.SchoolEvent
+import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.google.firebase.firestore.DocumentSnapshot
@@ -23,6 +24,7 @@ fun DocumentSnapshot.toUserProfile(): UserProfile =
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
         presenceStatus = getString("presenceStatus").orEmpty().ifBlank { "closed" },
         presenceUpdatedAt = getLong("presenceUpdatedAt") ?: 0L,
+        visibility = getString("visibility") ?: "public",
     )
 
 fun DocumentSnapshot.toFriendRequest(): FriendRequest =
@@ -45,6 +47,11 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
         startTime = getString("startTime").orEmpty(),
         endTime = getString("endTime").orEmpty(),
         ownerUserId = getString("ownerUserId").orEmpty(),
+        visibility = getString("visibility") ?: "public",
+        groupId = getString("groupId").orEmpty(),
+        createdByUserId = getString("createdByUserId").orEmpty(),
+        attendeeIds = (get("attendeeIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        invitedUserIds = (get("invitedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
     )
 
 fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
@@ -105,4 +112,17 @@ fun DocumentSnapshot.toUserGroupProfile(): UserGroupProfile =
         memberIds = (get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         adminIds = (get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         visibility = getString("visibility") ?: "public",
+    )
+
+fun DocumentSnapshot.toUserGroupInvite(): UserGroupInvite =
+    UserGroupInvite(
+        id = id,
+        groupId = getString("groupId").orEmpty(),
+        ownerUserId = getString("ownerUserId").orEmpty(),
+        fromUserId = getString("fromUserId").orEmpty(),
+        fromUserName = getString("fromUserName").orEmpty(),
+        toUserId = getString("toUserId").orEmpty(),
+        userGroupName = getString("userGroupName").orEmpty(),
+        status = getString("status") ?: "pending",
+        createdAt = getLong("createdAt") ?: 0L,
     )

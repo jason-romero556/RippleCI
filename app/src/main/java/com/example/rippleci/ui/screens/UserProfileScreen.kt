@@ -285,7 +285,10 @@ fun UserProfileScreen(
                 Text("No personal events yet.")
             } else {
                 personalEvents.forEach { event ->
-                    PersonalEventCard(event)
+                    PersonalEventCard(
+                        event = event,
+                        onClick = { onOpenEventProfile(event.id) },
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }

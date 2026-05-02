@@ -201,10 +201,6 @@ fun EventProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        OutlinedButton(onClick = onBack) {
-            Text("Back")
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(

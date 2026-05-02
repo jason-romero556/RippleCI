@@ -11,6 +11,10 @@ sealed class AppRoute {
         val clubId: String,
     ) : AppRoute()
 
+    data class UserGroupProfile(
+        val userGroupId: String,
+    ) : AppRoute()
+
     data class EventProfile(
         val eventId: String,
         val ownerUserId: String = "",

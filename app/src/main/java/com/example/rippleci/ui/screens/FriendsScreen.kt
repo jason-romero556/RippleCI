@@ -20,9 +20,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.rippleci.data.AppRoute
 import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toFriendRequest
+import com.example.rippleci.data.toUserGroupInvite
 import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.GroupVisibilityOptions
@@ -32,6 +34,7 @@ import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.launch
 
@@ -39,6 +42,7 @@ import kotlinx.coroutines.launch
 fun FriendsScreen(
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
     onOpenUserProfile: (String) -> Unit = {},
+    onOpenUserGroupProfile: (String) -> Unit = {},
     messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
@@ -55,6 +59,7 @@ fun FriendsScreen(
     var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
+    var pendingGroupInvites by remember { mutableStateOf<List<UserGroupInvite>>(emptyList()) }
     var userGroups by remember { mutableStateOf<List<UserGroupProfile>>(emptyList()) }
     var showCreateGroupDialog by remember { mutableStateOf(false) }
     var groupName by remember { mutableStateOf("") }
@@ -114,6 +119,74 @@ fun FriendsScreen(
                 .addSnapshotListener { snapshot, _ ->
                     userGroups = snapshot?.documents?.map { it.toUserGroupProfile() } ?: emptyList()
                 }
+
+            db
+                .collection("userGroupInvites")
+                .whereEqualTo("toUserId", uid)
+                .whereEqualTo("status", "pending")
+                .addSnapshotListener { snapshot, _ ->
+                    pendingGroupInvites =
+                        snapshot?.documents?.map { it.toUserGroupInvite() } ?: emptyList()
+                }
+        }
+    }
+
+    fun acceptGroupInvite(invite: UserGroupInvite) {
+        if (currentUserId.isBlank() || invite.id.isBlank()) return
+
+        val inviteRef = db.collection("userGroupInvites").document(invite.id)
+
+        if (invite.groupId.isBlank()) {
+            inviteRef.update("status", "expired")
+            return
+        }
+
+        val groupRef = db.collection("userGroups").document(invite.groupId)
+
+        groupRef.get().addOnSuccessListener { groupDoc ->
+            if (!groupDoc.exists()) {
+                inviteRef.update("status", "expired")
+                scope.launch {
+                    snackbarHostState.showSnackbar("That group no longer exists.")
+                }
+                return@addOnSuccessListener
+            }
+
+            val batch = db.batch()
+            batch.update(inviteRef, "status", "accepted")
+            batch.update(
+                groupRef,
+                mapOf(
+                    "memberIds" to FieldValue.arrayUnion(currentUserId),
+                    "invitedUserIds" to FieldValue.arrayRemove(currentUserId),
+                ),
+            )
+            batch.commit()
+        }
+    }
+
+    fun declineGroupInvite(invite: UserGroupInvite) {
+        if (currentUserId.isBlank() || invite.id.isBlank()) return
+
+        val inviteRef = db.collection("userGroupInvites").document(invite.id)
+
+        if (invite.groupId.isBlank()) {
+            inviteRef.update("status", "declined")
+            return
+        }
+
+        val groupRef = db.collection("userGroups").document(invite.groupId)
+
+        groupRef.get().addOnSuccessListener { groupDoc ->
+            if (!groupDoc.exists()) {
+                inviteRef.update("status", "declined")
+                return@addOnSuccessListener
+            }
+
+            val batch = db.batch()
+            batch.update(inviteRef, "status", "declined")
+            batch.update(groupRef, "invitedUserIds", FieldValue.arrayRemove(currentUserId))
+            batch.commit()
         }
     }
 
@@ -221,8 +294,8 @@ fun FriendsScreen(
                     text = { Text("Groups (${userGroups.size})") },
                 )
                 Tab(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     text = { Text("Find Students") },
                 )
             }
@@ -395,6 +468,37 @@ fun FriendsScreen(
                     Column(
                         modifier = Modifier.verticalScroll(rememberScrollState()),
                     ) {
+                        pendingGroupInvites.forEach { invite ->
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = invite.userGroupName.ifBlank { "Group invite" },
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+
+                                    Text(
+                                        text = "Invited by ${invite.fromUserName.ifBlank { invite.fromUserId.ifBlank { "Unknown user" } }}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                    )
+
+                                    Row {
+                                        Button(onClick = { acceptGroupInvite(invite) }) {
+                                            Text("Accept")
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        OutlinedButton(onClick = { declineGroupInvite(invite) }) {
+                                            Text("Decline")
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         Button(
                             onClick = { showCreateGroupDialog = true },
                             modifier = Modifier.fillMaxWidth(),
@@ -422,6 +526,15 @@ fun FriendsScreen(
                                             color = MaterialTheme.colorScheme.secondary,
                                         )
                                         Text("${group.memberIds.size} members")
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        OutlinedButton(
+                                            onClick = { onOpenUserGroupProfile(group.id) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Text("Open Group")
+                                        }
                                     }
                                 }
                             }

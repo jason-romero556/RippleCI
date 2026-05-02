@@ -10,4 +10,8 @@ data class PersonalEvent(
     val startTime: String = "",
     val endTime: String = "",
     val visibility: String = "public",
+    val groupId: String = "",
+    val createdByUserId: String = "",
+    val attendeeIds: List<String> = emptyList(),
+    val invitedUserIds: List<String> = emptyList(),
 )
