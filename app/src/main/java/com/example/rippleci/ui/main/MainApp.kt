@@ -37,12 +37,17 @@ import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
 import com.example.rippleci.ui.screens.UserProfileScreen
+import com.example.rippleci.ui.theme.AppTheme
+import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
 @Composable
-fun MainApp(onSignOut: () -> Unit) {
-    var currentDestination by remember { mutableStateOf(AppDestinations.MAP) }
+fun MainApp(
+    themeViewModel: ThemeViewModel,
+    onSignOut: () -> Unit
+) {
+    var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
     var route by remember { mutableStateOf<AppRoute>(AppRoute.MainTabs) }
     // var openConversationId by remember { mutableStateOf<String?>(null) }
     // var openConversationName by remember { mutableStateOf("") }
@@ -73,25 +78,33 @@ fun MainApp(onSignOut: () -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.surface
-                            )
-                        )
-                    ),
-                color = Color.Transparent,
-                shadowElevation = 4.dp, // Add a slight shadow for depth
+                modifier = Modifier.fillMaxWidth(),
+                color = if (themeViewModel.appTheme == AppTheme.SCHOOL) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Transparent
+                },
+                shadowElevation = 4.dp,
             ) {
                 Box(
-                    modifier =
-                        Modifier
-                            .statusBarsPadding()
-                            .height(56.dp)
-                            .fillMaxWidth(),
+                    modifier = Modifier
+                        .then(
+                            if (themeViewModel.appTheme == AppTheme.DYNAMIC) {
+                                Modifier.background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                            MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .fillMaxWidth(),
                 )
                 {
                     HelpfulLinksMenuButton(
@@ -99,11 +112,13 @@ fun MainApp(onSignOut: () -> Unit) {
                             Modifier
                                 .align(Alignment.CenterStart)
                                 .padding(start = 8.dp),
+                        tint = if (themeViewModel.appTheme == AppTheme.SCHOOL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = currentDestination.label,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.align(Alignment.Center),
+                        color = if (themeViewModel.appTheme == AppTheme.SCHOOL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                     if (route != AppRoute.MainTabs) {
                         IconButton(
@@ -113,6 +128,7 @@ fun MainApp(onSignOut: () -> Unit) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
+                                tint = if (themeViewModel.appTheme == AppTheme.SCHOOL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -128,6 +144,10 @@ fun MainApp(onSignOut: () -> Unit) {
                         when (currentDestination) {
                             AppDestinations.MAP -> {
                                 MapScreen()
+                            }
+
+                            AppDestinations.HOME -> {
+                                HomeScreen(themeViewModel = themeViewModel)
                             }
 
                             AppDestinations.FRIENDS -> {

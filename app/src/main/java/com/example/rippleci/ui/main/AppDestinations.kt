@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -12,6 +13,7 @@ enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
 ) {
+    HOME("Home", Icons.Default.Home),
     MAP("Map", Icons.Default.Place),
     FRIENDS("Friends", Icons.Default.Person),
     MESSAGES("Messages", Icons.Default.Email),
