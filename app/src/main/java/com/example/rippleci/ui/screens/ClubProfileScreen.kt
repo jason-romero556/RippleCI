@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.models.ClubProfile
+import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.UserLinkRow
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
@@ -51,10 +52,6 @@ fun ClubProfileScreen(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        OutlinedButton(onClick = onBack) {
-            Text("Back")
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(

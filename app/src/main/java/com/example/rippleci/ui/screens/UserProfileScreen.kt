@@ -1,6 +1,7 @@
 package com.example.rippleci.ui.screens
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -39,6 +41,8 @@ import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.UserLinkRow
 import com.example.rippleci.ui.components.UserPresenceIndicator
 import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.auth.User
 import com.google.firebase.firestore.firestore
 
@@ -51,13 +55,18 @@ fun UserProfileScreen(
     onOpenEventProfile: (String) -> Unit,
 ) {
     val db = Firebase.firestore
+    val auth = Firebase.auth
+    val currentUserId = auth.currentUser?.uid.orEmpty()
 
     var userProfile by remember { mutableStateOf(UserProfile()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var isFriend by remember { mutableStateOf(false) }
+    var isPending by remember { mutableStateOf(false) }
     var isFriendListExpanded by remember { mutableStateOf(true) }
     var isClubListExpanded by remember { mutableStateOf(true) }
     var isEventListExpanded by remember { mutableStateOf(true) }
+    var showRemoveDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(userId) {
         db
@@ -88,6 +97,64 @@ fun UserProfileScreen(
             }
     }
 
+    LaunchedEffect(currentUserId, userId) {
+        if (currentUserId.isBlank() || currentUserId == userId) return@LaunchedEffect
+
+        db
+            .collection("users")
+            .document(currentUserId)
+            .addSnapshotListener { doc, _ ->
+                val friendIds =
+                    (doc?.get("friends") as? List<*>)
+                        ?.mapNotNull { it as? String }
+                        ?: emptyList()
+
+                isFriend = friendIds.contains(userId)
+            }
+
+        db
+            .collection("friendRequests")
+            .whereEqualTo("fromUserId", currentUserId)
+            .whereEqualTo("toUserId", userId)
+            .whereEqualTo("status", "pending")
+            .addSnapshotListener { snapshot, _ ->
+                isPending = snapshot?.isEmpty == false
+            }
+    }
+
+    fun addFriend() {
+        if (currentUserId.isBlank() || currentUserId == userId) return
+
+        val request =
+            hashMapOf(
+                "fromUserId" to currentUserId,
+                "fromUserName" to (auth.currentUser?.email ?: ""),
+                "toUserId" to userId,
+                "status" to "pending",
+                "timestamp" to System.currentTimeMillis(),
+            )
+
+        db.collection("friendRequests").add(request)
+    }
+
+    fun removeFriend() {
+        val batch = db.batch()
+
+        batch.update(
+            db.collection("users").document(currentUserId),
+            "friends",
+            FieldValue.arrayRemove(userId),
+        )
+
+        batch.update(
+            db.collection("users").document(userId),
+            "friends",
+            FieldValue.arrayRemove(currentUserId),
+        )
+
+        batch.commit()
+    }
+
     Column(
         modifier =
             Modifier
@@ -95,31 +162,62 @@ fun UserProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        if (userProfile.profilePictureUrl.isNotBlank()) {
-            AsyncImage(
-                model = userProfile.profilePictureUrl,
-                contentDescription = "Profile Picture",
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .size(100.dp)
-                        .clip(CircleShape),
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.secondary,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = userProfile.name.ifBlank { "Unknown User" },
-            style = MaterialTheme.typography.headlineMedium,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         )
+        {
+            if (userProfile.profilePictureUrl.isNotBlank()) {
+                AsyncImage(
+                    model = userProfile.profilePictureUrl,
+                    contentDescription = "Profile Picture",
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .size(100.dp)
+                            .clip(CircleShape),
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = userProfile.name.ifBlank { "Unknown User" },
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                UserPresenceIndicator(user = userProfile)
+            }
+
+            if (currentUserId != userId) {
+                when {
+                    isFriend -> {
+                        OutlinedButton(onClick = { showRemoveDialog = true }) {
+                            Text("Friends")
+                        }
+                    }
+
+                    isPending -> {
+                        OutlinedButton(onClick = {}, enabled = false) {
+                            Text("Pending")
+                        }
+                    }
+
+                    else -> {
+                        Button(onClick = { addFriend() }) {
+                            Text("Add")
+                        }
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -187,7 +285,10 @@ fun UserProfileScreen(
                 Text("No personal events yet.")
             } else {
                 personalEvents.forEach { event ->
-                    PersonalEventCard(event)
+                    PersonalEventCard(
+                        event = event,
+                        onClick = { onOpenEventProfile(event.id) },
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }

@@ -16,28 +16,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.toEventInvite
+import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.ui.components.EventCard
-import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.screens.CollapsibleSection
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 
 @Composable
 fun EventsScreen(
     modifier: Modifier = Modifier,
     viewModel: EventsViewModel = viewModel(),
+    onOpenEventProfile: (String, String) -> Unit = { _, _ -> },
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
     val userId = auth.currentUser?.uid
+
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isPersonalExpanded by remember { mutableStateOf(true) }
     var isSchoolExpanded by remember { mutableStateOf(true) }
     var isCreatingEvent by remember { mutableStateOf(false) }
+    var pendingInvites by remember { mutableStateOf<List<EventInvite>>(emptyList()) }
+    var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var isInvitesExpanded by remember { mutableStateOf(true) }
+    var isAttendingExpanded by remember { mutableStateOf(true) }
 
     LaunchedEffect(userId) {
         userId?.let { uid ->
@@ -60,7 +70,82 @@ fun EventsScreen(
                             )
                         }
                 }
+
+            db
+                .collection("eventInvites")
+                .whereEqualTo("toUserId", uid)
+                .whereEqualTo("status", "pending")
+                .addSnapshotListener { snapshot, _ ->
+                    pendingInvites = snapshot?.documents?.map { it.toEventInvite() } ?: emptyList()
+                }
+
+            db
+                .collection("eventInvites")
+                .whereEqualTo("toUserId", uid)
+                .whereEqualTo("status", "accepted")
+                .addSnapshotListener { snapshot, _ ->
+                    attendingEvents = emptyList()
+
+                    val invites = snapshot?.documents?.map { it.toEventInvite() } ?: emptyList()
+
+                    invites.forEach { invite ->
+                        db
+                            .collection("users")
+                            .document(invite.ownerUserId)
+                            .collection("personalEvents")
+                            .document(invite.eventId)
+                            .get()
+                            .addOnSuccessListener { eventDoc ->
+                                if (eventDoc.exists()) {
+                                    val event =
+                                        eventDoc.toPersonalEvent().copy(
+                                            id = eventDoc.id,
+                                            ownerUserId = invite.ownerUserId,
+                                        )
+
+                                    attendingEvents =
+                                        attendingEvents
+                                            .filterNot { it.id == event.id && it.ownerUserId == event.ownerUserId } + event
+                                }
+                            }
+                    }
+                }
         }
+    }
+
+    fun acceptInvite(invite: EventInvite) {
+        val uid = userId ?: return
+
+        val inviteRef = db.collection("eventInvites").document(invite.id)
+        val eventRef =
+            db
+                .collection("users")
+                .document(invite.ownerUserId)
+                .collection("personalEvents")
+                .document(invite.eventId)
+
+        val batch = db.batch()
+        batch.update(inviteRef, "status", "accepted")
+        batch.update(eventRef, "attendeeIds", FieldValue.arrayUnion(uid))
+        batch.update(eventRef, "invitedUserIds", FieldValue.arrayRemove(uid))
+        batch.commit()
+    }
+
+    fun declineInvite(invite: EventInvite) {
+        val uid = userId ?: return
+
+        val inviteRef = db.collection("eventInvites").document(invite.id)
+        val eventRef =
+            db
+                .collection("users")
+                .document(invite.ownerUserId)
+                .collection("personalEvents")
+                .document(invite.eventId)
+
+        val batch = db.batch()
+        batch.update(inviteRef, "status", "declined")
+        batch.update(eventRef, "invitedUserIds", FieldValue.arrayRemove(uid))
+        batch.commit()
     }
 
     if (isCreatingEvent) {
@@ -75,6 +160,10 @@ fun EventsScreen(
                             "date" to newEvent.date,
                             "startTime" to newEvent.startTime,
                             "endTime" to newEvent.endTime,
+                            "ownerUserId" to uid,
+                            "attendeeIds" to listOf(uid),
+                            "invitedUserIds" to emptyList<String>(),
+                            "visibility" to newEvent.visibility,
                         )
 
                     db
@@ -100,13 +189,46 @@ fun EventsScreen(
                 text = "Upcoming Events",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(
-                    start = helpfulLinksMenuTitleStartPadding,
-                    top = 16.dp,
-                    end = 16.dp,
-                    bottom = 16.dp,
-                ),
+                modifier =
+                    Modifier.padding(
+                        start = helpfulLinksMenuTitleStartPadding,
+                        top = 16.dp,
+                        end = 16.dp,
+                        bottom = 16.dp,
+                    ),
             )
+
+            CollapsibleSection(
+                title = "Event Invites (${pendingInvites.size})",
+                expanded = isInvitesExpanded,
+                onToggle = { isInvitesExpanded = !isInvitesExpanded },
+            ) {
+                if (pendingInvites.isEmpty()) {
+                    Text("No pending event invites.")
+                } else {
+                    pendingInvites.forEach { invite ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(invite.eventTitle.ifBlank { "Untitled Event" })
+
+                                Row {
+                                    Button(onClick = { acceptInvite(invite) }) {
+                                        Text("Accept")
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    OutlinedButton(onClick = { declineInvite(invite) }) {
+                                        Text("Decline")
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
 
             CollapsibleSection(
                 title = "My Events",
@@ -126,7 +248,29 @@ fun EventsScreen(
                     Text("No personal events yet.")
                 } else {
                     personalEvents.forEach { event ->
-                        PersonalEventCard(event)
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(userId.orEmpty(), event.id) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            CollapsibleSection(
+                title = "Events I'm Attending",
+                expanded = isAttendingExpanded,
+                onToggle = { isAttendingExpanded = !isAttendingExpanded },
+            ) {
+                if (attendingEvents.isEmpty()) {
+                    Text("No accepted event invites yet.")
+                } else {
+                    attendingEvents.forEach { event ->
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(event.ownerUserId, event.id) },
+                        )
+
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }

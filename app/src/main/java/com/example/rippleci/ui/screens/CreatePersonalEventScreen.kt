@@ -1,7 +1,9 @@
 package com.example.rippleci.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
@@ -15,6 +17,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.ui.components.EventVisibilityOptions
+import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
@@ -31,8 +35,15 @@ fun CreatePersonalEventScreen(
     var date by remember { mutableStateOf("") }
     var startTime by remember { mutableStateOf("") }
     var endTime by remember { mutableStateOf("") }
+    var visibility by remember { mutableStateOf("public") }
 
-    Column(modifier = Modifier.padding(20.dp)) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
+    ) {
         TextField(
             value = title,
             onValueChange = { title = it },
@@ -81,6 +92,14 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        VisibilitySelector(
+            title = "Event Visibility",
+            selectedValue = visibility,
+            options = EventVisibilityOptions,
+            onValueChange = { visibility = it },
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = {
                 val event =
@@ -91,6 +110,7 @@ fun CreatePersonalEventScreen(
                         date = date,
                         startTime = startTime,
                         endTime = endTime,
+                        visibility = visibility,
                     )
                 onSave(event)
             },

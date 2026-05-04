@@ -1,5 +1,6 @@
 package com.example.rippleci.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,9 +20,15 @@ import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
 
 @Composable
-fun PersonalEventCard(event: PersonalEvent) {
+fun PersonalEventCard(
+    event: PersonalEvent,
+    onClick: () -> Unit = {},
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

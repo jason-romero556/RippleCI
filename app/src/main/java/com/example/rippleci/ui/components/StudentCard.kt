@@ -16,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import com.example.rippleci.data.models.UserProfile
 import coil.compose.AsyncImage
+import com.example.rippleci.data.models.UserProfile
 
 @Composable
 fun StudentCard(
@@ -83,7 +83,7 @@ fun StudentCard(
                 when {
                     isFriend -> {
                         OutlinedButton(onClick = { showRemoveDialog = true }) {
-                            Text("Friends")
+                            Text("Remove")
                         }
                     }
 

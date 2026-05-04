@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rippleci.ui.components.ProfileVisibilityOptions
+import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
@@ -40,37 +42,45 @@ fun ProfileScreen(onSignOut: () -> Unit) {
     var isEditing by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
+    var visibility by remember { mutableStateOf("public") }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            isUploading = true
-            val storageRef = storage.reference
-                .child("profile_pictures/$userId.jpg")
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let {
+                isUploading = true
+                val storageRef =
+                    storage.reference
+                        .child("profile_pictures/$userId.jpg")
 
-            storageRef.putFile(it)
-                .addOnSuccessListener {
-                    storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                        profilePictureUrl = downloadUrl.toString()
-                        userId?.let { uid ->
-                            db.collection("users").document(uid)
-                                .update("profilePictureUrl", profilePictureUrl)
+                storageRef
+                    .putFile(it)
+                    .addOnSuccessListener {
+                        storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                            profilePictureUrl = downloadUrl.toString()
+                            userId?.let { uid ->
+                                db
+                                    .collection("users")
+                                    .document(uid)
+                                    .update("profilePictureUrl", profilePictureUrl)
+                            }
+                            isUploading = false
+                            statusMessage = "Profile picture updated!"
                         }
+                    }.addOnFailureListener { e ->
                         isUploading = false
-                        statusMessage = "Profile picture updated!"
+                        statusMessage = "Upload failed: ${e.message}"
                     }
-                }
-                .addOnFailureListener { e ->
-                    isUploading = false
-                    statusMessage = "Upload failed: ${e.message}"
-                }
+            }
         }
-    }
 
     LaunchedEffect(userId) {
         userId?.let {
-            db.collection("users").document(it).get()
+            db
+                .collection("users")
+                .document(it)
+                .get()
                 .addOnSuccessListener { doc ->
                     name = doc.getString("name") ?: ""
                     bio = doc.getString("bio") ?: ""
@@ -78,16 +88,18 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                     clubs = (doc.get("clubs") as? List<*>)?.joinToString(", ") ?: ""
                     classes = (doc.get("classes") as? List<*>)?.joinToString(", ") ?: ""
                     profilePictureUrl = doc.getString("profilePictureUrl") ?: ""
+                    visibility = doc.getString("visibility") ?: "public"
                 }
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(32.dp)
+                .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -102,24 +114,26 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                     model = profilePictureUrl,
                     contentDescription = "Profile Picture",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .clickable { imagePickerLauncher.launch("image/*") }
+                    modifier =
+                        Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .clickable { imagePickerLauncher.launch("image/*") },
                 )
             } else {
                 Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .clickable { imagePickerLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .clickable { imagePickerLauncher.launch("image/*") },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         Icons.Default.AccountCircle,
                         contentDescription = "Add Photo",
                         modifier = Modifier.size(100.dp),
-                        tint = MaterialTheme.colorScheme.secondary
+                        tint = MaterialTheme.colorScheme.secondary,
                     )
                 }
             }
@@ -127,10 +141,11 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             Icon(
                 Icons.Default.Edit,
                 contentDescription = "Edit Photo",
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape),
-                tint = MaterialTheme.colorScheme.primary
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape),
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -144,7 +159,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
         Text(
             text = auth.currentUser?.email ?: "",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.secondary
+            color = MaterialTheme.colorScheme.secondary,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -154,7 +169,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -163,7 +178,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 onValueChange = { bio = it },
                 label = { Text("Bio") },
                 minLines = 3,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -171,7 +186,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 value = major,
                 onValueChange = { major = it },
                 label = { Text("Major") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -180,7 +195,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 onValueChange = { clubs = it },
                 label = { Text("Clubs (comma separated)") },
                 placeholder = { Text("e.g. ACM, Robotics Club") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -189,48 +204,59 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 onValueChange = { classes = it },
                 label = { Text("Classes (comma separated)") },
                 placeholder = { Text("e.g. CS 101, MATH 150") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            VisibilitySelector(
+                title = "Profile Visibility",
+                selectedValue = visibility,
+                options = ProfileVisibilityOptions,
+                onValueChange = { visibility = it },
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = {
                     userId?.let {
-                        val profile = hashMapOf(
-                            "name" to name,
-                            "bio" to bio,
-                            "email" to (auth.currentUser?.email ?: ""),
-                            "major" to major,
-                            "clubs" to clubs.split(",").map { it.trim() }.filter { it.isNotEmpty() },
-                            "classes" to classes.split(",").map { it.trim() }.filter { it.isNotEmpty() },
-                            "profilePictureUrl" to profilePictureUrl
-                        )
-                        db.collection("users").document(it)
+                        val profile =
+                            hashMapOf(
+                                "name" to name,
+                                "bio" to bio,
+                                "email" to (auth.currentUser?.email ?: ""),
+                                "major" to major,
+                                "clubs" to clubs.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+                                "classes" to classes.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+                                "profilePictureUrl" to profilePictureUrl,
+                                "visibility" to visibility,
+                            )
+                        db
+                            .collection("users")
+                            .document(it)
                             .set(profile)
                             .addOnSuccessListener {
                                 statusMessage = "Profile saved!"
                                 isEditing = false
-                            }
-                            .addOnFailureListener { e ->
+                            }.addOnFailureListener { e ->
                                 statusMessage = "Error: ${e.message}"
                             }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Save Profile")
             }
-
         } else {
             Text(
                 text = if (name.isNotEmpty()) name else "No name set",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
             )
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = if (bio.isNotEmpty()) bio else "No bio yet",
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -243,7 +269,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
 
             Button(
                 onClick = { isEditing = true },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Edit Profile")
             }
@@ -258,7 +284,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
 
         OutlinedButton(
             onClick = onSignOut,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Sign Out")
         }
@@ -266,10 +292,13 @@ fun ProfileScreen(onSignOut: () -> Unit) {
 }
 
 @Composable
-fun ProfileInfoRow(label: String, value: String) {
+fun ProfileInfoRow(
+    label: String,
+    value: String,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(text = "$label:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
         Text(text = value, style = MaterialTheme.typography.bodyMedium)

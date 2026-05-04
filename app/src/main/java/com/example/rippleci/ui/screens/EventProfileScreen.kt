@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,19 +27,32 @@ import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.ProfileInfoRow
 import com.example.rippleci.ui.components.UserLinkRow
 import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 
 @Composable
 fun EventProfileScreen(
     eventId: String,
+    ownerUserId: String,
     onBack: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
     onOpenClubProfile: (String) -> Unit,
     onOpenEventProfile: (String) -> Unit,
 ) {
     val db = Firebase.firestore
+    val currentUserId =
+        Firebase.auth.currentUser
+            ?.uid
+            .orEmpty()
+    val eventOwnerUserId = ownerUserId.ifBlank { currentUserId }
 
+    var ownerUserId by remember { mutableStateOf("") }
+    var attendeeIds by remember { mutableStateOf(emptyList<String>()) }
+    var invitedUserIds by remember { mutableStateOf(emptyList<String>()) }
+    var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var showInviteDialog by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
@@ -46,13 +62,17 @@ fun EventProfileScreen(
     var clubId by remember { mutableStateOf("") }
     var creatorProfile by remember { mutableStateOf<UserProfile?>(null) }
 
-    LaunchedEffect(eventId) {
+    LaunchedEffect(eventId, currentUserId) {
+        if (currentUserId.isBlank()) return@LaunchedEffect
+
         db
-            .collectionGroup("personalEvents")
-            .whereEqualTo(FieldPath.documentId(), eventId)
+            .collection("users")
+            .document(eventOwnerUserId)
+            .collection("personalEvents")
+            .document(eventId)
             .get()
-            .addOnSuccessListener { result ->
-                val doc = result.documents.firstOrNull() ?: return@addOnSuccessListener
+            .addOnSuccessListener { doc ->
+                if (!doc.exists()) return@addOnSuccessListener
 
                 title = doc.getString("title").orEmpty()
                 description = doc.getString("description").orEmpty()
@@ -62,21 +82,116 @@ fun EventProfileScreen(
                 endTime = doc.getString("endTime").orEmpty()
                 clubId = doc.getString("clubId").orEmpty()
 
-                val ownerUserId =
-                    doc.reference.parent.parent
-                        ?.id
-                        .orEmpty()
+                ownerUserId = doc.getString("ownerUserId") ?: currentUserId
 
-                if (ownerUserId.isNotBlank()) {
+                attendeeIds =
+                    (doc.get("attendeeIds") as? List<*>)
+                        ?.mapNotNull { it as? String }
+                        ?: emptyList()
+
+                invitedUserIds =
+                    (doc.get("invitedUserIds") as? List<*>)
+                        ?.mapNotNull { it as? String }
+                        ?: emptyList()
+
+                db
+                    .collection("users")
+                    .document(ownerUserId)
+                    .get()
+                    .addOnSuccessListener { userDoc ->
+                        creatorProfile = userDoc.toUserProfile()
+                    }
+            }
+    }
+
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isBlank()) return@LaunchedEffect
+
+        db
+            .collection("users")
+            .document(currentUserId)
+            .get()
+            .addOnSuccessListener { userDoc ->
+                val friendIds =
+                    (userDoc.get("friends") as? List<*>)
+                        ?.mapNotNull { it as? String }
+                        ?: emptyList()
+
+                if (friendIds.isEmpty()) {
+                    friendProfiles = emptyList()
+                } else {
                     db
                         .collection("users")
-                        .document(ownerUserId)
+                        .whereIn(FieldPath.documentId(), friendIds.take(10))
                         .get()
-                        .addOnSuccessListener { userDoc ->
-                            creatorProfile = userDoc.toUserProfile()
+                        .addOnSuccessListener { result ->
+                            friendProfiles = result.documents.map { it.toUserProfile() }
                         }
                 }
             }
+    }
+
+    fun inviteUser(user: UserProfile) {
+        val inviteId = "${ownerUserId}_${eventId}_${user.id}"
+
+        val eventRef =
+            db
+                .collection("users")
+                .document(ownerUserId)
+                .collection("personalEvents")
+                .document(eventId)
+
+        val inviteRef =
+            db
+                .collection("eventInvites")
+                .document(inviteId)
+
+        val batch = db.batch()
+
+        batch.set(
+            inviteRef,
+            mapOf(
+                "eventId" to eventId,
+                "ownerUserId" to ownerUserId,
+                "fromUserId" to currentUserId,
+                "toUserId" to user.id,
+                "eventTitle" to title,
+                "status" to "pending",
+                "createdAt" to System.currentTimeMillis(),
+            ),
+        )
+
+        batch.update(eventRef, "invitedUserIds", FieldValue.arrayUnion(user.id))
+
+        batch.commit().addOnSuccessListener {
+            invitedUserIds = invitedUserIds + user.id
+        }
+    }
+
+    if (showInviteDialog) {
+        AlertDialog(
+            onDismissRequest = { showInviteDialog = false },
+            title = { Text("Invite Friends") },
+            text = {
+                Column {
+                    friendProfiles.forEach { friend ->
+                        val alreadyInvited = invitedUserIds.contains(friend.id)
+
+                        OutlinedButton(
+                            onClick = { inviteUser(friend) },
+                            enabled = !alreadyInvited,
+                        ) {
+                            Text(if (alreadyInvited) "${friend.name} invited" else friend.name)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showInviteDialog = false }) {
+                    Text("Done")
+                }
+            },
+        )
     }
 
     Column(
@@ -86,10 +201,6 @@ fun EventProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        OutlinedButton(onClick = onBack) {
-            Text("Back")
-        }
-
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
@@ -116,6 +227,14 @@ fun EventProfileScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        if (currentUserId == ownerUserId && ownerUserId.isNotBlank()) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(onClick = { showInviteDialog = true }) {
+                Text("Invite Friends")
+            }
+        }
 
         Text("Created By", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
