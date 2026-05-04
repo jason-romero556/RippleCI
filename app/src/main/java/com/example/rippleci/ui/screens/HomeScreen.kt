@@ -142,7 +142,7 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Current Theme: ${viewModel.appTheme.name}")
+                Text("Current Theme: ${viewModel.appTheme.label}")
             }
             DropdownMenu(
                 expanded = expanded,
@@ -151,9 +151,9 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
             ) {
                 AppTheme.entries.forEach { theme ->
                     DropdownMenuItem(
-                        text = { Text(theme.name) },
+                        text = { Text(theme.label) },
                         onClick = {
-                            viewModel.appTheme = theme
+                            viewModel.setTheme(theme)
                             expanded = false
                         }
                     )
@@ -171,7 +171,7 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
             Spacer(modifier = Modifier.weight(1f))
             Switch(
                 checked = viewModel.isDarkTheme ?: isSystemInDarkTheme(),
-                onCheckedChange = { viewModel.isDarkTheme = it }
+                onCheckedChange = { viewModel.setDarkMode(it) }
             )
         }
         Text(
@@ -180,7 +180,7 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (viewModel.isDarkTheme != null) {
-            TextButton(onClick = { viewModel.isDarkTheme = null }) {
+            TextButton(onClick = { viewModel.setDarkMode(null) }) {
                 Text("Reset to System")
             }
         }

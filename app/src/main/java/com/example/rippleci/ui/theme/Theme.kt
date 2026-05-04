@@ -19,27 +19,108 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-enum class AppTheme {
-    SCHOOL,
-    DYNAMIC,
+enum class AppTheme(
+    val label: String,
+) {
+    NEW_SCHOOL("New School"),
+    OLD_SCHOOL("Old School"),
+    ECO_FRIENDLY("Eco Friendly"),
+    SKY(label = "Sky"),
+    SUNSET(label = "Sunset"),
+    OCEAN(label = "Ocean"),
+
+    DYNAMIC("Dynamic (System)"),
 }
 
-private val SchoolDarkColorScheme =
+private val NewSchoolDarkColorScheme =
     darkColorScheme(
         primary = CSUCI_Clay,
         secondary = CSUCI_Sand,
         tertiary = CSUCI_IslandBlue,
         onPrimary = Color.White,
+        background = CSUCI_Shale,
+        surface = CSUCI_IslandBlue,
+        onSurface = Color.White,
+        onBackground = Color.White,
     )
 
-private val SchoolLightColorScheme =
+private val NewSchoolLightColorScheme =
     lightColorScheme(
         primary = CSUCI_Clay,
         secondary = CSUCI_IslandBlue,
         tertiary = CSUCI_Sand,
         onPrimary = Color.White,
+        background = CSUCI_Sand,
+        surface = Color.White,
     )
 
+private val OldSchoolLightColorScheme =
+    lightColorScheme(
+        primary = CSUCI_Red,
+        secondary = CSUCI_IslandBlue,
+        onPrimary = Color.White,
+    )
+
+private val OldSchoolDarkColorScheme =
+    darkColorScheme(
+        primary = Color(0xFFfC092F),
+        secondary = CSUCI_Sand,
+        background = CSUCI_Shale,
+        surface = CSUCI_Shale,
+        onPrimary = Color.White,
+        onSurface = Color.White,
+    )
+
+private val EcoLightColorScheme =
+    lightColorScheme(
+        primary = CSUCI_Sage,
+        secondary = CSUCI_Desert,
+        onPrimary = Color.White,
+    )
+
+private val EcoDarkColorScheme =
+    darkColorScheme(
+        primary = CSUCI_Sage,
+        secondary = CSUCI_Desert,
+        background = Color(0xFF1B2414),
+        surface = Color(0xFF1B2414),
+        onPrimary = Color.White,
+        onSurface = Color.White,
+    )
+private val lightSkyScheme =
+    lightColorScheme(
+        primary = CSUCI_Sky,
+        secondary = CSUCI_Sand,
+    )
+private val darkSkyScheme =
+    darkColorScheme(
+        primary = CSUCI_Sky,
+        secondary = CSUCI_Sand,
+    )
+
+private val lightSunsetScheme =
+    lightColorScheme(
+        primary = CSUCI_Horizon,
+        secondary = CSUCI_Desert,
+    )
+private val darkSunsetScheme =
+    darkColorScheme(
+        primary = CSUCI_Horizon,
+        secondary = CSUCI_Desert,
+    )
+
+private val lightOceanScheme =
+    lightColorScheme(
+        primary = CSUCI_Teal,
+        secondary = CSUCI_IslandBlue,
+    )
+
+private val darkOceanScheme =
+    darkColorScheme(
+        primary = CSUCI_Teal,
+        secondary = CSUCI_IslandBlue,
+        background = Color((0xFF1B2414)),
+    )
 private val DarkColorScheme =
     darkColorScheme(
         primary = Purple80,
@@ -56,7 +137,7 @@ private val LightColorScheme =
 
 @Composable
 fun RippleCITheme(
-    appTheme: AppTheme = AppTheme.SCHOOL,
+    appTheme: AppTheme = AppTheme.NEW_SCHOOL,
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
@@ -64,8 +145,28 @@ fun RippleCITheme(
 ) {
     val colorScheme =
         when (appTheme) {
-            AppTheme.SCHOOL -> {
-                if (darkTheme) SchoolDarkColorScheme else SchoolLightColorScheme
+            AppTheme.NEW_SCHOOL -> {
+                if (darkTheme) NewSchoolDarkColorScheme else NewSchoolLightColorScheme
+            }
+
+            AppTheme.OLD_SCHOOL -> {
+                if (darkTheme) OldSchoolDarkColorScheme else OldSchoolLightColorScheme
+            }
+
+            AppTheme.ECO_FRIENDLY -> {
+                if (darkTheme) EcoDarkColorScheme else EcoLightColorScheme
+            }
+
+            AppTheme.SKY -> {
+                if (darkTheme) darkSkyScheme else lightSkyScheme
+            }
+
+            AppTheme.SUNSET -> {
+                if (darkTheme) darkSunsetScheme else lightSunsetScheme
+            }
+
+            AppTheme.OCEAN -> {
+                if (darkTheme) darkOceanScheme else lightOceanScheme
             }
 
             AppTheme.DYNAMIC -> {

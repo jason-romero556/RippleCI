@@ -16,6 +16,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,8 +55,19 @@ fun MainApp(
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
 
+    val navSuiteColors = if (themeViewModel.appTheme != AppTheme.DYNAMIC) {
+        NavigationSuiteDefaults.colors(
+            navigationBarContainerColor = MaterialTheme.colorScheme.primary,
+            navigationBarContentColor = MaterialTheme.colorScheme.onPrimary,
+            navigationRailContainerColor = MaterialTheme.colorScheme.primary,
+            navigationRailContentColor = MaterialTheme.colorScheme.onPrimary
+        )
+    } else {
+        NavigationSuiteDefaults.colors()
+    }
+
     NavigationSuiteScaffold(
-        {
+        navigationSuiteItems = {
             AppDestinations.entries.forEach { destination ->
                 item(
                     selected = currentDestination == destination,
@@ -75,11 +87,12 @@ fun MainApp(
                 )
             }
         },
+        navigationSuiteColors = navSuiteColors
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = if (themeViewModel.appTheme == AppTheme.SCHOOL) {
+                color = if (themeViewModel.appTheme != AppTheme.DYNAMIC) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     Color.Transparent
@@ -112,13 +125,13 @@ fun MainApp(
                             Modifier
                                 .align(Alignment.CenterStart)
                                 .padding(start = 8.dp),
-                        tint = if (themeViewModel.appTheme == AppTheme.SCHOOL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        tint = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = currentDestination.label,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.align(Alignment.Center),
-                        color = if (themeViewModel.appTheme == AppTheme.SCHOOL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        color = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                     if (route != AppRoute.MainTabs) {
                         IconButton(
@@ -128,7 +141,7 @@ fun MainApp(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = if (themeViewModel.appTheme == AppTheme.SCHOOL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                tint = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
