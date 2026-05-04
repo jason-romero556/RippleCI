@@ -3,7 +3,6 @@ package com.example.rippleci.ui.main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,6 +37,7 @@ import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
 import com.example.rippleci.ui.screens.UserProfileScreen
+import com.example.rippleci.ui.screens.UserGroupProfileScreen
 import com.example.rippleci.ui.theme.AppTheme
 import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
@@ -252,6 +252,7 @@ fun MainApp(
                 is AppRoute.EventProfile -> {
                     EventProfileScreen(
                         eventId = currentRoute.eventId,
+                        ownerUserId = currentRoute.ownerUserId,
                         onBack = { route = AppRoute.MainTabs },
                         onOpenUserProfile = { userId ->
                             route = AppRoute.UserProfile(userId)
@@ -261,6 +262,16 @@ fun MainApp(
                         },
                         onOpenEventProfile = { eventId ->
                             route = AppRoute.EventProfile(eventId)
+                        },
+                    )
+                }
+
+                is AppRoute.UserGroupProfile -> {
+                    UserGroupProfileScreen(
+                        userGroupId = currentRoute.userGroupId,
+                        onBack = { route = AppRoute.MainTabs },
+                        onOpenUserProfile = { userId ->
+                            route = AppRoute.UserProfile(userId)
                         },
                     )
                 }
