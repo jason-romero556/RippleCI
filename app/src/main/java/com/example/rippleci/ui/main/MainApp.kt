@@ -128,7 +128,11 @@ fun MainApp(
                         tint = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = currentDestination.label,
+                        text = when (route) {
+                            is AppRoute.Events -> "Events"
+                            is AppRoute.Conversation -> (route as AppRoute.Conversation).title
+                            else -> currentDestination.label
+                        },
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.align(Alignment.Center),
                         color = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
@@ -160,7 +164,10 @@ fun MainApp(
                             }
 
                             AppDestinations.HOME -> {
-                                HomeScreen(themeViewModel = themeViewModel)
+                                HomeScreen(
+                                    themeViewModel = themeViewModel,
+                                    onAddEvent = { route = AppRoute.Events }
+                                )
                             }
 
                             AppDestinations.FRIENDS -> {
@@ -196,12 +203,16 @@ fun MainApp(
                             AppDestinations.PROFILE -> {
                                 ProfileScreen(onSignOut = onSignOut)
                             }
-
-                            AppDestinations.EVENTS -> {
-                                EventsScreen()
-                            }
                         }
                     }
+                }
+
+                is AppRoute.Events -> {
+                    EventsScreen(
+                        onOpenEventProfile = { ownerId, eventId ->
+                            route = AppRoute.EventProfile(eventId, ownerId)
+                        }
+                    )
                 }
 
                 is AppRoute.Conversation -> {

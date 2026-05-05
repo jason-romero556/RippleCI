@@ -4,6 +4,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +29,8 @@ import java.util.*
 @Composable
 fun HomeScreen(
     eventsViewModel: EventsViewModel = viewModel(),
-    themeViewModel: ThemeViewModel
+    themeViewModel: ThemeViewModel,
+    onAddEvent: () -> Unit
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -61,66 +64,82 @@ fun HomeScreen(
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        // --- CUSTOM EVENTS SECTION ---
-        Text(
-            text = "My Custom Events",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        if (personalEvents.isEmpty()) {
-            Text("No custom events yet.", style = MaterialTheme.typography.bodyMedium)
-        } else {
-            personalEvents.forEach { event ->
-                PersonalEventCard(event = event)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // --- CUSTOM EVENTS SECTION ---
+            Text(
+                text = "My Custom Events",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- TODAY'S SCHOOL EVENTS SECTION ---
-        Text(
-            text = "Today's School Events",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        when (val state = uiState) {
-            is EventsUiState.Loading -> CircularProgressIndicator()
-            is EventsUiState.Error -> Text("Could not load school events.")
-            is EventsUiState.Success -> {
-                // Filter events that match today's date
-                // Note: Assuming state.events.startDateTime is in a parseable format or contains the date
-                val todaysEvents = state.events.filter { event ->
-                    event.startDateTime.contains(todayDateString)
+            if (personalEvents.isEmpty()) {
+                Text("No custom events yet.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                personalEvents.forEach { event ->
+                    PersonalEventCard(event = event)
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
+            }
 
-                if (todaysEvents.isEmpty()) {
-                    Text("No school events scheduled for today.", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    todaysEvents.forEach { event ->
-                        EventCard(event = event)
-                        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- TODAY'S SCHOOL EVENTS SECTION ---
+            Text(
+                text = "Today's School Events",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when (val state = uiState) {
+                is EventsUiState.Loading -> CircularProgressIndicator()
+                is EventsUiState.Error -> Text("Could not load school events.")
+                is EventsUiState.Success -> {
+                    // Filter events that match today's date
+                    // Note: Assuming state.events.startDateTime is in a parseable format or contains the date
+                    val todaysEvents = state.events.filter { event ->
+                        event.startDateTime.contains(todayDateString)
+                    }
+
+                    if (todaysEvents.isEmpty()) {
+                        Text(
+                            "No school events scheduled for today.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        todaysEvents.forEach { event ->
+                            EventCard(event = event)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // --- THEME SELECTOR SECTION ---
+            ThemeSelector(themeViewModel)
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // --- THEME SELECTOR SECTION ---
-        ThemeSelector(themeViewModel)
+        FloatingActionButton(
+            onClick = onAddEvent,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Event")
+        }
     }
 }
 
