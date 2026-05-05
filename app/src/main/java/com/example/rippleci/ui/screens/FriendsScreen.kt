@@ -2,7 +2,6 @@ package com.example.rippleci.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -11,14 +10,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import com.example.rippleci.data.AppRoute
+import androidx.compose.ui.window.PopupProperties
+import com.example.rippleci.data.CsuciClassYears
+import com.example.rippleci.data.CsuciClubs
+import com.example.rippleci.data.CsuciMajors
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
@@ -28,7 +24,6 @@ import com.example.rippleci.data.toUserGroupInvite
 import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.GroupVisibilityOptions
-import com.example.rippleci.ui.components.ProfileInfoRow
 import com.example.rippleci.ui.components.StudentCard
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.messages.MessagesViewModel
@@ -38,6 +33,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendsScreen(
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
@@ -53,6 +49,12 @@ fun FriendsScreen(
 
     var incomingRequests by remember { mutableStateOf<List<FriendRequest>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
+    var selectedMajor by remember { mutableStateOf("") }
+    var majorQuery by remember { mutableStateOf("") }
+    var selectedClub by remember { mutableStateOf("") }
+    var clubQuery by remember { mutableStateOf("") }
+    var selectedClass by remember { mutableStateOf("") }
+    var classExpanded by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var friendIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
@@ -65,6 +67,22 @@ fun FriendsScreen(
     var groupName by remember { mutableStateOf("") }
     var groupDescription by remember { mutableStateOf("") }
     var groupVisibility by remember { mutableStateOf("public") }
+
+    val filteredMajors = remember(majorQuery) {
+        if (majorQuery.isBlank()) {
+            emptyList()
+        } else {
+            CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+        }
+    }
+
+    val filteredClubs = remember(clubQuery) {
+        if (clubQuery.isBlank()) {
+            emptyList()
+        } else {
+            CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+        }
+    }
 
     LaunchedEffect(currentUserId) {
         currentUserId?.let { uid ->
@@ -213,6 +231,54 @@ fun FriendsScreen(
                 groupDescription = ""
                 groupVisibility = "public"
                 showCreateGroupDialog = false
+            }
+    }
+
+    fun runStudentSearch() {
+        val query = searchQuery.trim().lowercase()
+        val hasCriteria =
+            query.isNotBlank() ||
+                selectedMajor.isNotBlank() ||
+                selectedClub.isNotBlank() ||
+                selectedClass.isNotBlank()
+
+        if (!hasCriteria) {
+            searchResults = emptyList()
+            return
+        }
+
+        isSearching = true
+        db.collection("users").get()
+            .addOnSuccessListener { result ->
+                searchResults =
+                    result.documents
+                        .filter { doc ->
+                            if (doc.id == currentUserId) return@filter false
+
+                            val name = doc.getString("name").orEmpty()
+                            val email = doc.getString("email").orEmpty()
+                            val major = doc.getString("major").orEmpty()
+                            val clubs = (doc.get("clubs") as? List<*>)?.map { it.toString() } ?: emptyList()
+                            val classYear = doc.getString("classYear").orEmpty()
+                            val classes = (doc.get("classes") as? List<*>)?.map { it.toString() } ?: emptyList()
+                            val classValues = (classes + classYear).filter { it.isNotBlank() }
+
+                            val textMatch =
+                                query.isBlank() ||
+                                    name.lowercase().contains(query) ||
+                                    email.lowercase().contains(query) ||
+                                    major.lowercase().contains(query) ||
+                                    clubs.any { it.lowercase().contains(query) } ||
+                                    classValues.any { it.lowercase().contains(query) }
+                            val majorMatch = selectedMajor.isBlank() || major == selectedMajor
+                            val clubMatch = selectedClub.isBlank() || clubs.any { it == selectedClub }
+                            val classMatch = selectedClass.isBlank() || classValues.any { it == selectedClass }
+
+                            textMatch && majorMatch && clubMatch && classMatch
+                        }.map { doc -> doc.toUserProfile() }
+                isSearching = false
+            }.addOnFailureListener {
+                isSearching = false
             }
     }
 
@@ -543,57 +609,165 @@ fun FriendsScreen(
                 }
 
                 3 -> {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        label = { Text("Search by major, club, or class") },
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                if (searchQuery.isNotBlank()) {
-                                    isSearching = true
-                                    val query = searchQuery.trim().lowercase()
-                                    db
-                                        .collection("users")
-                                        .get()
-                                        .addOnSuccessListener { result ->
-                                            searchResults =
-                                                result.documents
-                                                    .filter { doc ->
-                                                        if (doc.id == currentUserId) return@filter false
-                                                        val name = (doc.getString("name") ?: "").lowercase()
-                                                        val nameMatch = name.contains(query)
-                                                        val email = (doc.getString("email") ?: "").lowercase()
-                                                        val emailMatch = email.contains(query)
-                                                        val major = (doc.getString("major") ?: "").lowercase()
-                                                        val majorMatch = major.contains(query)
-                                                        val clubMatch =
-                                                            (doc.get("clubs") as? List<*>)
-                                                                ?.any { it.toString().lowercase() == query } ?: false
-                                                        val classMatch =
-                                                            (doc.get("classes") as? List<*>)
-                                                                ?.any { it.toString().lowercase() == query } ?: false
-                                                        majorMatch || clubMatch || classMatch || nameMatch || emailMatch
-                                                    }.map { doc -> doc.toUserProfile() }
-                                            isSearching = false
-                                        }.addOnFailureListener { isSearching = false }
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("Search by name or email") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(onClick = { runStudentSearch() }) {
+                                    Icon(Icons.Default.Search, contentDescription = "Search")
                                 }
-                            }) {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
+                            },
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = majorQuery,
+                                onValueChange = {
+                                    majorQuery = it
+                                    selectedMajor = ""
+                                },
+                                label = { Text("Major") },
+                                placeholder = { Text("Any major") },
+                                isError = majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty(),
+                                supportingText = {
+                                    if (majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty()) {
+                                        Text("No matching major found")
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            DropdownMenu(
+                                expanded = majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isNotEmpty(),
+                                onDismissRequest = { },
+                                properties = PopupProperties(focusable = false),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                filteredMajors.forEach { major ->
+                                    DropdownMenuItem(
+                                        text = { Text(major) },
+                                        onClick = {
+                                            selectedMajor = major
+                                            majorQuery = major
+                                        },
+                                    )
+                                }
                             }
-                        },
-                    )
+                        }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    if (isSearching) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                    } else if (searchResults.isEmpty() && searchQuery.isNotBlank()) {
-                        Text("No students found", color = MaterialTheme.colorScheme.secondary)
-                    } else {
-                        Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = clubQuery,
+                                onValueChange = {
+                                    clubQuery = it
+                                    selectedClub = ""
+                                },
+                                label = { Text("Club") },
+                                placeholder = { Text("Any club") },
+                                isError = clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty(),
+                                supportingText = {
+                                    if (clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty()) {
+                                        Text("No matching club found")
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            DropdownMenu(
+                                expanded = clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isNotEmpty(),
+                                onDismissRequest = { },
+                                properties = PopupProperties(focusable = false),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                filteredClubs.forEach { club ->
+                                    DropdownMenuItem(
+                                        text = { Text(club) },
+                                        onClick = {
+                                            selectedClub = club
+                                            clubQuery = club
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        ExposedDropdownMenuBox(
+                            expanded = classExpanded,
+                            onExpandedChange = { classExpanded = !classExpanded },
                         ) {
+                            OutlinedTextField(
+                                value = selectedClass,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Class Year") },
+                                placeholder = { Text("Any year") },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = classExpanded)
+                                },
+                                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                                singleLine = true,
+                            )
+                            ExposedDropdownMenu(
+                                expanded = classExpanded,
+                                onDismissRequest = { classExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Any year") },
+                                    onClick = {
+                                        selectedClass = ""
+                                        classExpanded = false
+                                    },
+                                )
+                                CsuciClassYears.forEach { classYear ->
+                                    DropdownMenuItem(
+                                        text = { Text(classYear) },
+                                        onClick = {
+                                            selectedClass = classYear
+                                            classExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { runStudentSearch() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Search")
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        val hasCriteria =
+                            searchQuery.isNotBlank() ||
+                                selectedMajor.isNotBlank() ||
+                                selectedClub.isNotBlank() ||
+                                selectedClass.isNotBlank()
+
+                        if (isSearching) {
+                            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                        } else if (searchResults.isEmpty() && hasCriteria) {
+                            Text("No students found", color = MaterialTheme.colorScheme.secondary)
+                        } else {
                             searchResults.forEach { user ->
                                 val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
                                 StudentCard(

@@ -3,7 +3,6 @@ package com.example.rippleci.ui.main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,12 +38,17 @@ import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
 import com.example.rippleci.ui.screens.UserGroupProfileScreen
 import com.example.rippleci.ui.screens.UserProfileScreen
+import com.example.rippleci.ui.theme.AppTheme
+import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
 @Composable
-fun MainApp(onSignOut: () -> Unit) {
-    var currentDestination by remember { mutableStateOf(AppDestinations.MAP) }
+fun MainApp(
+    themeViewModel: ThemeViewModel,
+    onSignOut: () -> Unit,
+) {
+    var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
     var routeStack by remember { mutableStateOf<List<AppRoute>>(emptyList()) }
@@ -61,8 +66,27 @@ fun MainApp(onSignOut: () -> Unit) {
         routeStack = emptyList()
     }
 
+    val usesAppPalette = themeViewModel.appTheme != AppTheme.DYNAMIC
+    val topBarContentColor =
+        if (usesAppPalette) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val navSuiteColors =
+        if (usesAppPalette) {
+            NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = MaterialTheme.colorScheme.primary,
+                navigationBarContentColor = MaterialTheme.colorScheme.onPrimary,
+                navigationRailContainerColor = MaterialTheme.colorScheme.primary,
+                navigationRailContentColor = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            NavigationSuiteDefaults.colors()
+        }
+
     NavigationSuiteScaffold(
-        {
+        navigationSuiteItems = {
             AppDestinations.entries.forEach { destination ->
                 item(
                     selected = currentDestination == destination,
@@ -82,28 +106,33 @@ fun MainApp(onSignOut: () -> Unit) {
                 )
             }
         },
+        navigationSuiteColors = navSuiteColors,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .background(
-                            brush =
-                                Brush.verticalGradient(
-                                    colors =
-                                        listOf(
-                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                            MaterialTheme.colorScheme.surface,
-                                        ),
-                                ),
-                        ),
-                color = Color.Transparent,
-                shadowElevation = 4.dp, // Add a slight shadow for depth
+                modifier = Modifier.fillMaxWidth(),
+                color = if (usesAppPalette) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shadowElevation = 4.dp,
             ) {
                 Box(
                     modifier =
                         Modifier
+                            .then(
+                                if (usesAppPalette) {
+                                    Modifier
+                                } else {
+                                    Modifier.background(
+                                        brush =
+                                            Brush.verticalGradient(
+                                                colors =
+                                                    listOf(
+                                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                                        MaterialTheme.colorScheme.surface,
+                                                    ),
+                                            ),
+                                    )
+                                },
+                            )
                             .statusBarsPadding()
                             .height(56.dp)
                             .fillMaxWidth(),
@@ -114,18 +143,24 @@ fun MainApp(onSignOut: () -> Unit) {
                             Modifier
                                 .align(Alignment.CenterStart)
                                 .padding(start = 8.dp),
+                        tint = topBarContentColor,
                     )
                     Text(
                         text = currentDestination.label,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.align(Alignment.Center),
+                        color = topBarContentColor,
                     )
                     if (routeStack.isNotEmpty()) {
                         IconButton(
                             onClick = { popRoute() },
                             modifier = Modifier.align(Alignment.CenterEnd),
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = topBarContentColor,
+                            )
                         }
                     }
                 }
@@ -138,6 +173,15 @@ fun MainApp(onSignOut: () -> Unit) {
                     // without covering the bottom navigation bar.
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         when (currentDestination) {
+                            AppDestinations.HOME -> {
+                                HomeScreen(
+                                    themeViewModel = themeViewModel,
+                                    onOpenEventProfile = { ownerUserId, eventId ->
+                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId))
+                                    },
+                                )
+                            }
+
                             AppDestinations.MAP -> {
                                 MapScreen()
                             }

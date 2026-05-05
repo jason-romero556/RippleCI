@@ -92,4 +92,5 @@ dependencies {
     // KotlinX Serialization (For parsing the JSON into your SchoolEvent class)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation(libs.androidx.datastore.preferences)
 }

@@ -62,7 +62,7 @@ fun EventProfileScreen(
     var clubId by remember { mutableStateOf("") }
     var creatorProfile by remember { mutableStateOf<UserProfile?>(null) }
 
-    LaunchedEffect(eventId, currentUserId) {
+    LaunchedEffect(eventId, currentUserId, eventOwnerUserId) {
         if (currentUserId.isBlank()) return@LaunchedEffect
 
         db
@@ -82,7 +82,7 @@ fun EventProfileScreen(
                 endTime = doc.getString("endTime").orEmpty()
                 clubId = doc.getString("clubId").orEmpty()
 
-                ownerUserId = doc.getString("ownerUserId") ?: currentUserId
+                ownerUserId = doc.getString("ownerUserId") ?: eventOwnerUserId
 
                 attendeeIds =
                     (doc.get("attendeeIds") as? List<*>)
