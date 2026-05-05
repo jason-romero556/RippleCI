@@ -40,13 +40,16 @@ import com.example.rippleci.ui.screens.UserProfileScreen
 import com.example.rippleci.ui.screens.UserGroupProfileScreen
 import com.example.rippleci.ui.theme.AppTheme
 import com.example.rippleci.ui.theme.ThemeViewModel
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
 @Composable
 fun MainApp(
     themeViewModel: ThemeViewModel,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    navigateTo: String? = null,
+    conversationId: String? = null
 ) {
     var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
     var route by remember { mutableStateOf<AppRoute>(AppRoute.MainTabs) }
@@ -54,6 +57,30 @@ fun MainApp(
     // var openConversationName by remember { mutableStateOf("") }
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
+
+    LaunchedEffect(navigateTo) {
+        when (navigateTo) {
+            "friends" -> {
+                currentDestination = AppDestinations.FRIENDS
+                route = AppRoute.MainTabs
+            }
+            "messages" -> {
+                currentDestination = AppDestinations.MESSAGES
+                if (conversationId != null) {
+                    FirebaseFirestore.getInstance()
+                        .collection("conversations")
+                        .document(conversationId)
+                        .get()
+                        .addOnSuccessListener { doc ->
+                            val name = doc.getString("name") ?: "Chat"
+                            route = AppRoute.Conversation(conversationId, name)
+                        }
+                } else {
+                    route = AppRoute.MainTabs
+                }
+            }
+        }
+    }
 
     val navSuiteColors = if (themeViewModel.appTheme != AppTheme.DYNAMIC) {
         NavigationSuiteDefaults.colors(
