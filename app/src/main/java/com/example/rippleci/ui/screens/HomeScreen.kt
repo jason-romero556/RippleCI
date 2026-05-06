@@ -11,7 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.data.eventSortMillis
+import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.events.EventsUiState
@@ -35,26 +38,39 @@ fun HomeScreen(
     val userId = auth.currentUser?.uid
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     val uiState by eventsViewModel.uiState.collectAsState()
+    val nowMillis = System.currentTimeMillis()
+    val upcomingPersonalEvents =
+        personalEvents
+            .filterNot { it.isPastEvent(nowMillis) }
+            .sortedBy { it.eventSortMillis() }
+    val pastPersonalEvents =
+        personalEvents
+            .filter { it.isPastEvent(nowMillis) }
+            .sortedByDescending { it.eventSortMillis() }
 
     // 1. Fetch Personal Events (Custom Events)
-    LaunchedEffect(userId) {
-        userId?.let { uid ->
-            db.collection("users").document(uid).collection("personalEvents")
-                .get()
-                .addOnSuccessListener { result ->
-                    personalEvents = result.documents.map { doc ->
-                        PersonalEvent(
-                            id = doc.id,
-                            ownerUserId = uid,
-                            title = doc.getString("title").orEmpty(),
-                            description = doc.getString("description").orEmpty(),
-                            location = doc.getString("location").orEmpty(),
-                            date = doc.getString("date").orEmpty(),
-                            startTime = doc.getString("startTime").orEmpty(),
-                            endTime = doc.getString("endTime").orEmpty(),
-                        )
+    DisposableEffect(userId) {
+        val uid = userId
+        if (uid.isNullOrBlank()) {
+            personalEvents = emptyList()
+            onDispose { }
+        } else {
+            val registration =
+                db.collection("users").document(uid).collection("personalEvents")
+                    .addSnapshotListener { snapshot, _ ->
+                        personalEvents =
+                            snapshot
+                                ?.documents
+                                ?.map { doc ->
+                                    doc.toPersonalEvent().copy(
+                                        id = doc.id,
+                                        ownerUserId = doc.getString("ownerUserId").orEmpty().ifBlank { uid },
+                                    )
+                                }
+                                ?: emptyList()
                     }
-                }
+
+            onDispose { registration.remove() }
         }
     }
 
@@ -69,7 +85,6 @@ fun HomeScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // --- CUSTOM EVENTS SECTION ---
         Text(
             text = "My Custom Events",
             style = MaterialTheme.typography.titleLarge,
@@ -78,10 +93,10 @@ fun HomeScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         
-        if (personalEvents.isEmpty()) {
-            Text("No custom events yet.", style = MaterialTheme.typography.bodyMedium)
+        if (upcomingPersonalEvents.isEmpty()) {
+            Text("No upcoming custom events.", style = MaterialTheme.typography.bodyMedium)
         } else {
-            personalEvents.forEach { event ->
+            upcomingPersonalEvents.forEach { event ->
                 PersonalEventCard(
                     event = event,
                     onClick = { onOpenEventProfile(event.ownerUserId.ifBlank { userId.orEmpty() }, event.id) },
@@ -92,7 +107,28 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- TODAY'S SCHOOL EVENTS SECTION ---
+        Text(
+            text = "Past Custom Events",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (pastPersonalEvents.isEmpty()) {
+            Text("No past custom events.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            pastPersonalEvents.forEach { event ->
+                PersonalEventCard(
+                    event = event,
+                    onClick = { onOpenEventProfile(event.ownerUserId.ifBlank { userId.orEmpty() }, event.id) },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Text(
             text = "Today's School Events",
             style = MaterialTheme.typography.titleLarge,

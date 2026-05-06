@@ -9,6 +9,8 @@ data class PersonalEvent(
     val date: String = "",
     val startTime: String = "",
     val endTime: String = "",
+    val startAtMillis: Long = 0L,
+    val endAtMillis: Long = 0L,
     val visibility: String = "public",
     val groupId: String = "",
     val createdByUserId: String = "",

@@ -59,6 +59,7 @@ import com.example.rippleci.ui.components.ProfileVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.storage
 
@@ -418,7 +419,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                             )
 
                         db.collection("users").document(uid)
-                            .set(profile)
+                            .set(profile, SetOptions.merge())
                             .addOnSuccessListener {
                                 statusMessage = "Profile saved!"
                                 isEditing = false

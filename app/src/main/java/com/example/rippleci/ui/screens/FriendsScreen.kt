@@ -15,6 +15,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.example.rippleci.data.CsuciClassYears
 import com.example.rippleci.data.CsuciClubs
 import com.example.rippleci.data.CsuciMajors
+import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
@@ -68,21 +69,23 @@ fun FriendsScreen(
     var groupDescription by remember { mutableStateOf("") }
     var groupVisibility by remember { mutableStateOf("public") }
 
-    val filteredMajors = remember(majorQuery) {
-        if (majorQuery.isBlank()) {
-            emptyList()
-        } else {
-            CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+    val filteredMajors =
+        remember(majorQuery) {
+            if (majorQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+            }
         }
-    }
 
-    val filteredClubs = remember(clubQuery) {
-        if (clubQuery.isBlank()) {
-            emptyList()
-        } else {
-            CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+    val filteredClubs =
+        remember(clubQuery) {
+            if (clubQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+            }
         }
-    }
 
     LaunchedEffect(currentUserId) {
         currentUserId?.let { uid ->
@@ -248,7 +251,9 @@ fun FriendsScreen(
         }
 
         isSearching = true
-        db.collection("users").get()
+        db
+            .collection("users")
+            .get()
             .addOnSuccessListener { result ->
                 searchResults =
                     result.documents
@@ -276,6 +281,13 @@ fun FriendsScreen(
 
                             textMatch && majorMatch && clubMatch && classMatch
                         }.map { doc -> doc.toUserProfile() }
+                        .filter { profile ->
+                            canViewProfile(
+                                profile = profile,
+                                currentUserId = currentUserId,
+                                currentUserFriendIds = friendIds,
+                            )
+                        }
                 isSearching = false
             }.addOnFailureListener {
                 isSearching = false
