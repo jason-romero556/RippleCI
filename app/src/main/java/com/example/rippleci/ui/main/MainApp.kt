@@ -99,6 +99,35 @@ fun MainApp(
         onNotificationNavigationHandled()
     }
 
+    LaunchedEffect(notificationNavigationTarget) {
+        val target = notificationNavigationTarget ?: return@LaunchedEffect
+
+        when (target.navigateTo) {
+            "friends" -> {
+                routeStack = emptyList()
+                currentDestination = AppDestinations.FRIENDS
+                requestedFriendsTab = 1
+            }
+
+            "messages" -> {
+                currentDestination = AppDestinations.MESSAGES
+                if (target.conversationId.isBlank()) {
+                    routeStack = emptyList()
+                } else {
+                    routeStack =
+                        listOf(
+                            AppRoute.Conversation(
+                                conversationId = target.conversationId,
+                                title = target.title.ifBlank { "Conversation" },
+                            ),
+                        )
+                }
+            }
+        }
+
+        onNotificationNavigationHandled()
+    }
+
     val usesAppPalette = themeViewModel.appTheme != AppTheme.DYNAMIC
     val topBarContentColor =
         if (usesAppPalette) {
