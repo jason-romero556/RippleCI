@@ -37,10 +37,11 @@ import com.example.rippleci.ui.screens.FriendsScreen
 import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
-import com.example.rippleci.ui.screens.UserGroupProfileScreen
 import com.example.rippleci.ui.screens.UserProfileScreen
+import com.example.rippleci.ui.screens.UserGroupProfileScreen
 import com.example.rippleci.ui.theme.AppTheme
 import com.example.rippleci.ui.theme.ThemeViewModel
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
@@ -50,24 +51,49 @@ fun MainApp(
     notificationNavigationTarget: NotificationNavigationTarget? = null,
     onNotificationNavigationHandled: () -> Unit = {},
     onSignOut: () -> Unit,
+    navigateTo: String? = null,
+    conversationId: String? = null
 ) {
     var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
+    var route by remember { mutableStateOf<AppRoute>(AppRoute.MainTabs) }
+    // var openConversationId by remember { mutableStateOf<String?>(null) }
+    // var openConversationName by remember { mutableStateOf("") }
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
-    var routeStack by remember { mutableStateOf<List<AppRoute>>(emptyList()) }
-    var requestedFriendsTab by remember { mutableStateOf<Int?>(null) }
-    val route = routeStack.lastOrNull() ?: AppRoute.MainTabs
 
-    fun navigateTo(nextRoute: AppRoute) {
-        routeStack = routeStack + nextRoute
+    LaunchedEffect(navigateTo) {
+        when (navigateTo) {
+            "friends" -> {
+                currentDestination = AppDestinations.FRIENDS
+                route = AppRoute.MainTabs
+            }
+            "messages" -> {
+                currentDestination = AppDestinations.MESSAGES
+                if (conversationId != null) {
+                    FirebaseFirestore.getInstance()
+                        .collection("conversations")
+                        .document(conversationId)
+                        .get()
+                        .addOnSuccessListener { doc ->
+                            val name = doc.getString("name") ?: "Chat"
+                            route = AppRoute.Conversation(conversationId, name)
+                        }
+                } else {
+                    route = AppRoute.MainTabs
+                }
+            }
+        }
     }
 
-    fun popRoute() {
-        routeStack = routeStack.dropLast(1)
-    }
-
-    fun resetToTabs() {
-        routeStack = emptyList()
+    val navSuiteColors = if (themeViewModel.appTheme != AppTheme.DYNAMIC) {
+        NavigationSuiteDefaults.colors(
+            navigationBarContainerColor = MaterialTheme.colorScheme.primary,
+            navigationBarContentColor = MaterialTheme.colorScheme.onPrimary,
+            navigationRailContainerColor = MaterialTheme.colorScheme.primary,
+            navigationRailContentColor = MaterialTheme.colorScheme.onPrimary
+        )
+    } else {
+        NavigationSuiteDefaults.colors()
     }
 
     LaunchedEffect(notificationNavigationTarget) {
@@ -124,7 +150,7 @@ fun MainApp(
                 item(
                     selected = currentDestination == destination,
                     onClick = {
-                        resetToTabs()
+                        route = AppRoute.MainTabs
                         currentDestination = destination
                     },
                     icon = {
@@ -139,36 +165,37 @@ fun MainApp(
                 )
             }
         },
-        navigationSuiteColors = navSuiteColors,
+        navigationSuiteColors = navSuiteColors
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = if (usesAppPalette) MaterialTheme.colorScheme.primary else Color.Transparent,
+                color = if (themeViewModel.appTheme != AppTheme.DYNAMIC) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Transparent
+                },
                 shadowElevation = 4.dp,
             ) {
                 Box(
-                    modifier =
-                        Modifier
-                            .then(
-                                if (usesAppPalette) {
-                                    Modifier
-                                } else {
-                                    Modifier.background(
-                                        brush =
-                                            Brush.verticalGradient(
-                                                colors =
-                                                    listOf(
-                                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                                        MaterialTheme.colorScheme.surface,
-                                                    ),
-                                            ),
+                    modifier = Modifier
+                        .then(
+                            if (themeViewModel.appTheme == AppTheme.DYNAMIC) {
+                                Modifier.background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                            MaterialTheme.colorScheme.surface
+                                        )
                                     )
-                                },
-                            )
-                            .statusBarsPadding()
-                            .height(56.dp)
-                            .fillMaxWidth(),
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .statusBarsPadding()
+                        .height(56.dp)
+                        .fillMaxWidth(),
                 )
                 {
                     HelpfulLinksMenuButton(
@@ -176,23 +203,23 @@ fun MainApp(
                             Modifier
                                 .align(Alignment.CenterStart)
                                 .padding(start = 8.dp),
-                        tint = topBarContentColor,
+                        tint = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = currentDestination.label,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.align(Alignment.Center),
-                        color = topBarContentColor,
+                        color = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                     )
-                    if (routeStack.isNotEmpty()) {
+                    if (route != AppRoute.MainTabs) {
                         IconButton(
-                            onClick = { popRoute() },
+                            onClick = { route = AppRoute.MainTabs },
                             modifier = Modifier.align(Alignment.CenterEnd),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = topBarContentColor,
+                                tint = if (themeViewModel.appTheme != AppTheme.DYNAMIC) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -219,6 +246,10 @@ fun MainApp(
                                 MapScreen()
                             }
 
+                            AppDestinations.HOME -> {
+                                HomeScreen(themeViewModel = themeViewModel)
+                            }
+
                             AppDestinations.FRIENDS -> {
                                 FriendsScreen(
                                     requestedSelectedTab = requestedFriendsTab,
@@ -226,13 +257,10 @@ fun MainApp(
                                         requestedFriendsTab = null
                                     },
                                     onOpenConversation = { conversationId, convName ->
-                                        navigateTo(AppRoute.Conversation(conversationId, convName))
+                                        route = AppRoute.Conversation(conversationId, convName)
                                     },
                                     onOpenUserProfile = { userId ->
-                                        navigateTo(AppRoute.UserProfile(userId))
-                                    },
-                                    onOpenUserGroupProfile = { groupId ->
-                                        navigateTo(AppRoute.UserGroupProfile(groupId))
+                                        route = AppRoute.UserProfile(userId)
                                     },
                                     messagesViewModel = messagesViewModel,
                                 )
@@ -241,16 +269,16 @@ fun MainApp(
                             AppDestinations.MESSAGES -> {
                                 MessagesScreen(
                                     onOpenConversation = { conversationId, convName ->
-                                        navigateTo(AppRoute.Conversation(conversationId, convName))
+                                        route = AppRoute.Conversation(conversationId, convName)
                                     },
                                     onOpenUserProfile = { userId ->
-                                        navigateTo(AppRoute.UserProfile(userId))
+                                        route = AppRoute.UserProfile(userId)
                                     },
                                     onOpenClubProfile = { clubId ->
-                                        navigateTo(AppRoute.ClubProfile(clubId))
+                                        route = AppRoute.ClubProfile(clubId)
                                     },
                                     onOpenEventProfile = { eventId ->
-                                        navigateTo(AppRoute.EventProfile(eventId))
+                                        route = AppRoute.EventProfile(eventId)
                                     },
                                     viewModel = messagesViewModel,
                                 )
@@ -261,16 +289,7 @@ fun MainApp(
                             }
 
                             AppDestinations.EVENTS -> {
-                                EventsScreen(
-                                    onOpenEventProfile = { ownerUserId, eventId ->
-                                        navigateTo(
-                                            AppRoute.EventProfile(
-                                                eventId,
-                                                ownerUserId,
-                                            ),
-                                        )
-                                    },
-                                )
+                                EventsScreen()
                             }
                         }
                     }
@@ -280,7 +299,7 @@ fun MainApp(
                     ConversationScreen(
                         conversationId = currentRoute.conversationId,
                         conversationName = currentRoute.title,
-                        onBack = { popRoute() },
+                        onBack = { route = AppRoute.MainTabs },
                         viewModel = messagesViewModel,
                     )
                 }
@@ -288,20 +307,15 @@ fun MainApp(
                 is AppRoute.UserProfile -> {
                     UserProfileScreen(
                         userId = currentRoute.userId,
-                        onBack = { popRoute() },
+                        onBack = { route = AppRoute.MainTabs },
                         onOpenUserProfile = { userId ->
-                            navigateTo(AppRoute.UserProfile(userId))
+                            route = AppRoute.UserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
-                            navigateTo(AppRoute.ClubProfile(clubId))
+                            route = AppRoute.ClubProfile(clubId)
                         },
                         onOpenEventProfile = { eventId ->
-                            navigateTo(
-                                AppRoute.EventProfile(
-                                    eventId = eventId,
-                                    ownerUserId = currentRoute.userId,
-                                ),
-                            )
+                            route = AppRoute.EventProfile(eventId)
                         },
                     )
                 }
@@ -310,27 +324,19 @@ fun MainApp(
                     ClubProfileScreen(
                         clubId = currentRoute.clubId,
                         isMember = true,
-                        onBack = { popRoute() },
+                        onBack = { route = AppRoute.MainTabs },
                         onJoinClub = { /* Handle join club logic */ },
                         onLeaveClub = { /* Handle leave club logic */ },
                         onViewEvents = { /* Handle view events logic */ },
                         onOpenUserProfile = { userId ->
-                            navigateTo(AppRoute.UserProfile(userId))
+                            route = AppRoute.UserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
-                            navigateTo(AppRoute.ClubProfile(clubId))
+                            route = AppRoute.ClubProfile(clubId)
                         },
                         onOpenEventProfile = { eventId ->
-                            navigateTo(AppRoute.EventProfile(eventId))
+                            route = AppRoute.EventProfile(eventId)
                         },
-                    )
-                }
-
-                is AppRoute.UserGroupProfile -> {
-                    UserGroupProfileScreen(
-                        userGroupId = currentRoute.userGroupId,
-                        onBack = { popRoute() },
-                        onOpenUserProfile = { userId -> navigateTo(AppRoute.UserProfile(userId)) },
                     )
                 }
 
@@ -338,15 +344,25 @@ fun MainApp(
                     EventProfileScreen(
                         eventId = currentRoute.eventId,
                         ownerUserId = currentRoute.ownerUserId,
-                        onBack = { popRoute() },
+                        onBack = { route = AppRoute.MainTabs },
                         onOpenUserProfile = { userId ->
-                            navigateTo(AppRoute.UserProfile(userId))
+                            route = AppRoute.UserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
-                            navigateTo(AppRoute.ClubProfile(clubId))
+                            route = AppRoute.ClubProfile(clubId)
                         },
                         onOpenEventProfile = { eventId ->
-                            navigateTo(AppRoute.EventProfile(eventId))
+                            route = AppRoute.EventProfile(eventId)
+                        },
+                    )
+                }
+
+                is AppRoute.UserGroupProfile -> {
+                    UserGroupProfileScreen(
+                        userGroupId = currentRoute.userGroupId,
+                        onBack = { route = AppRoute.MainTabs },
+                        onOpenUserProfile = { userId ->
+                            route = AppRoute.UserProfile(userId)
                         },
                     )
                 }

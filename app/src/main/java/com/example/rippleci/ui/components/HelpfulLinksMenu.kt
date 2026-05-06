@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -53,7 +54,7 @@ val helpfulLinksMenuTitleStartPadding = 72.dp
 fun HelpfulLinksMenuButton(
     modifier: Modifier = Modifier,
     links: List<HelpfulLink> = defaultHelpfulLinks,
-    tint: Color = LocalContentColor.current,
+    tint: Color = LocalContentColor.current
 ) {
     val uriHandler = LocalUriHandler.current
     var expanded by remember { mutableStateOf(false) }
@@ -65,7 +66,7 @@ fun HelpfulLinksMenuButton(
         Icon(
             imageVector = Icons.Default.Menu,
             contentDescription = "Open helpful links",
-            tint = tint,
+            tint = tint
         )
     }
 

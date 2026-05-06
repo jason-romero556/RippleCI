@@ -30,8 +30,7 @@ import java.util.*
 @Composable
 fun HomeScreen(
     eventsViewModel: EventsViewModel = viewModel(),
-    themeViewModel: ThemeViewModel,
-    onOpenEventProfile: (String, String) -> Unit = { _, _ -> },
+    themeViewModel: ThemeViewModel
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -160,6 +159,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // --- THEME SELECTOR SECTION ---
         ThemeSelector(themeViewModel)
     }
 }
@@ -173,21 +173,21 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
             text = "Themes",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         Box {
             OutlinedButton(
                 onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Current Theme: ${viewModel.appTheme.label}")
             }
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 AppTheme.entries.forEach { theme ->
                     DropdownMenuItem(
@@ -195,7 +195,7 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
                         onClick = {
                             viewModel.setTheme(theme)
                             expanded = false
-                        },
+                        }
                     )
                 }
             }
@@ -205,19 +205,19 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Dark Mode", style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.weight(1f))
             Switch(
                 checked = viewModel.isDarkTheme ?: isSystemInDarkTheme(),
-                onCheckedChange = { viewModel.setDarkMode(it) },
+                onCheckedChange = { viewModel.setDarkMode(it) }
             )
         }
         Text(
             text = if (viewModel.isDarkTheme == null) "Following System" else "Manual Override",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (viewModel.isDarkTheme != null) {
             TextButton(onClick = { viewModel.setDarkMode(null) }) {

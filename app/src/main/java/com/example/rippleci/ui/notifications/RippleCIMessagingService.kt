@@ -18,16 +18,12 @@ class RippleCIMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-        val title = remoteMessage.data["title"] ?: remoteMessage.notification?.title ?: "New Notification"
-        val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: ""
+        val title = remoteMessage.notification?.title ?: "New Notification"
+        val body = remoteMessage.notification?.body ?: ""
         val conversationId = remoteMessage.data["conversationId"]
         val type = remoteMessage.data["type"]
         val requestId = remoteMessage.data["requestId"]
-        val senderId = remoteMessage.data["senderId"]
-        if (type == "message" && ActiveConversationTracker.conversationId == conversationId) {
-            return
-        }
-        showNotification(title, body, conversationId, type, requestId, senderId)
+        showNotification(title, body, conversationId, type, requestId)
     }
 
     private fun showNotification(
@@ -35,8 +31,7 @@ class RippleCIMessagingService : FirebaseMessagingService() {
         body: String,
         conversationId: String? = null,
         type: String? = null,
-        requestId: String? = null,
-        senderId: String? = null,
+        requestId: String? = null
     ) {
         val channelId = if (type == "friend_request") {
             "friend_requests_channel"
@@ -66,15 +61,12 @@ class RippleCIMessagingService : FirebaseMessagingService() {
         when (type) {
             "friend_request" -> {
                 intent.putExtra("navigate_to", "friends")
-                intent.putExtra("senderId", senderId)
                 if (requestId != null) {
                     intent.putExtra("requestId", requestId)
                 }
             }
             else -> {
                 intent.putExtra("navigate_to", "messages")
-                intent.putExtra("title", title)
-                intent.putExtra("senderId", senderId)
                 if (conversationId != null) {
                     intent.putExtra("conversationId", conversationId)
                 }
@@ -85,7 +77,7 @@ class RippleCIMessagingService : FirebaseMessagingService() {
             this,
             System.currentTimeMillis().toInt(),
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(this, channelId)

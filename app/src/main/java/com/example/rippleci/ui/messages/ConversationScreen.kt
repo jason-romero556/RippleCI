@@ -15,9 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.rippleci.data.Message
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -37,11 +34,7 @@ fun ConversationScreen(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val lifecycleOwner = LocalLifecycleOwner.current
     var typingJob by remember { mutableStateOf<Job?>(null) }
-    var isConversationVisible by remember {
-        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
-    }
 
     val members = conversations
         .firstOrNull { it.conversationId == conversationId }
@@ -68,39 +61,11 @@ fun ConversationScreen(
     }
 
     // Clear typing indicator when leaving
-    DisposableEffect(conversationId, lifecycleOwner) {
+    DisposableEffect(conversationId) {
         viewModel.setActiveConversation(conversationId)
-        val observer =
-            LifecycleEventObserver { _, event ->
-                when (event) {
-                    Lifecycle.Event.ON_START,
-                    Lifecycle.Event.ON_RESUME -> {
-                        isConversationVisible = true
-                        viewModel.setActiveConversation(conversationId)
-                    }
-
-                    Lifecycle.Event.ON_STOP -> {
-                        isConversationVisible = false
-                        viewModel.clearActiveConversation(conversationId)
-                    }
-                    else -> Unit
-                }
-            }
-
-        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
             viewModel.setTyping(conversationId, false)
-            viewModel.clearActiveConversation(conversationId)
-        }
-    }
-
-    LaunchedEffect(conversationId, isConversationVisible) {
-        if (!isConversationVisible) return@LaunchedEffect
-
-        while (true) {
-            viewModel.setActiveConversation(conversationId)
-            delay(60_000L)
+            viewModel.clearActiveConversation()
         }
     }
 

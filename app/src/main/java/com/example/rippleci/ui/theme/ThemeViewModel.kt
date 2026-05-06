@@ -8,15 +8,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
-class ThemeViewModel(
-    application: Application,
-) : AndroidViewModel(application) {
+class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val themePreferences = ThemePreferences(application)
 
     var appTheme by mutableStateOf(AppTheme.NEW_SCHOOL)
         private set
 
-    var isDarkTheme by mutableStateOf<Boolean?>(null)
+    var isDarkTheme by mutableStateOf<Boolean?>(null) // null means follow system
         private set
 
     init {

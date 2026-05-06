@@ -282,47 +282,15 @@ class MessagesViewModel : ViewModel() {
     }
     fun setActiveConversation(conversationId: String) {
         if (currentUserId.isEmpty()) return
-        ActiveConversationTracker.conversationId = conversationId
         db.collection("users")
             .document(currentUserId)
-            .set(
-                mapOf(
-                    "activeConversationId" to conversationId,
-                    "activeConversationUpdatedAt" to System.currentTimeMillis(),
-                ),
-                SetOptions.merge()
-            )
+            .update("activeConversationId", conversationId)
     }
 
-    fun clearActiveConversation(conversationId: String? = null) {
-        if (conversationId == null || ActiveConversationTracker.conversationId == conversationId) {
-            ActiveConversationTracker.conversationId = null
-        }
-
+    fun clearActiveConversation() {
         if (currentUserId.isEmpty()) return
-
-        val userRef = db.collection("users").document(currentUserId)
-        if (conversationId == null) {
-            userRef.update(
-                mapOf(
-                    "activeConversationId" to null,
-                    "activeConversationUpdatedAt" to System.currentTimeMillis(),
-                )
-            )
-            return
-        }
-
-        db.runTransaction { transaction ->
-            val userDoc = transaction.get(userRef)
-            if (userDoc.getString("activeConversationId") == conversationId) {
-                transaction.update(
-                    userRef,
-                    mapOf(
-                        "activeConversationId" to null,
-                        "activeConversationUpdatedAt" to System.currentTimeMillis(),
-                    )
-                )
-            }
-        }
+        db.collection("users")
+            .document(currentUserId)
+            .update("activeConversationId", null)
     }
 }

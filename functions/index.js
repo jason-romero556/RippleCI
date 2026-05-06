@@ -2,13 +2,6 @@ const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
-function toMillis(value) {
-  if (!value) return 0;
-  if (typeof value === "number") return value;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  return 0;
-}
-
 exports.sendFriendRequestNotification = onDocumentCreated(
   "friendRequests/{requestId}",
   async (event) => {
@@ -44,12 +37,14 @@ exports.sendFriendRequestNotification = onDocumentCreated(
 
       await admin.messaging().send({
         token: fcmToken,
+        notification: {
+          title: "New Friend Request",
+          body: senderName + " sent you a friend request!",
+        },
         data: {
           type: "friend_request",
           senderId: senderId,
           requestId: event.params.requestId,
-          title: "New Friend Request",
-          body: senderName + " sent you a friend request!",
         },
         android: {
           priority: "high",
@@ -114,22 +109,9 @@ exports.sendMessageNotification = onDocumentCreated(
           : null;
         if (!fcmToken) return;
 
-        // Skip if recipient already has this conversation open
         const activeConversationId = recipientData.activeConversationId || null;
-        const activeConversationUpdatedAt = toMillis(
-          recipientData.activeConversationUpdatedAt,
-        );
-        const isViewingConversation =
-          activeConversationId === convId &&
-          activeConversationUpdatedAt > 0 &&
-          Date.now() - activeConversationUpdatedAt <=
-            activeConversationFreshAfterMs;
-
-        if (isViewingConversation) {
-          console.log(
-            "Skipping notification for " + recipientId +
-              " - already in conversation",
-          );
+        if (activeConversationId === convId) {
+          console.log("Skipping notification for " + recipientId + " — already in conversation");
           return;
         }
 
