@@ -93,6 +93,25 @@ fun MainApp(
         NavigationSuiteDefaults.colors()
     }
 
+    val usesAppPalette = themeViewModel.appTheme != AppTheme.DYNAMIC
+    val topBarContentColor =
+        if (usesAppPalette) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val navSuiteColors =
+        if (usesAppPalette) {
+            NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = MaterialTheme.colorScheme.primary,
+                navigationBarContentColor = MaterialTheme.colorScheme.onPrimary,
+                navigationRailContainerColor = MaterialTheme.colorScheme.primary,
+                navigationRailContentColor = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            NavigationSuiteDefaults.colors()
+        }
+
     NavigationSuiteScaffold(
         navigationSuiteItems = {
             AppDestinations.entries.forEach { destination ->
@@ -182,6 +201,15 @@ fun MainApp(
                     // without covering the bottom navigation bar.
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         when (currentDestination) {
+                            AppDestinations.HOME -> {
+                                HomeScreen(
+                                    themeViewModel = themeViewModel,
+                                    onOpenEventProfile = { ownerUserId, eventId ->
+                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId))
+                                    },
+                                )
+                            }
+
                             AppDestinations.MAP -> {
                                 MapScreen()
                             }
