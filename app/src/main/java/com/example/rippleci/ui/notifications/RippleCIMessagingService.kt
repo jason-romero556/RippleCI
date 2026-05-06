@@ -17,8 +17,8 @@ class RippleCIMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-        val title = remoteMessage.notification?.title ?: "New Notification"
-        val body = remoteMessage.notification?.body ?: ""
+        val title = remoteMessage.data["title"] ?: remoteMessage.notification?.title ?: "New Notification"
+        val body = remoteMessage.data["body"] ?: remoteMessage.notification?.body ?: ""
         val conversationId = remoteMessage.data["conversationId"]
         val type = remoteMessage.data["type"]
         val requestId = remoteMessage.data["requestId"]
