@@ -6,7 +6,10 @@ import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
 
 object UserPresence {
+    const val AUTOMATIC = "automatic"
     const val ONLINE = "online"
+    const val IDLE = "idle"
+    const val OFFLINE = "offline"
     const val MINIMIZED = "minimized"
     const val CLOSED = "closed"
 
@@ -16,15 +19,22 @@ object UserPresence {
     fun resolveStatus(
         rawStatus: String,
         updatedAt: Long,
+        presenceMode: String = AUTOMATIC,
         now: Long = System.currentTimeMillis(),
     ): String {
-        if (updatedAt <= 0L) return CLOSED
+        when (presenceMode) {
+            ONLINE -> return ONLINE
+            IDLE, MINIMIZED -> return IDLE
+            OFFLINE, CLOSED -> return OFFLINE
+        }
+
+        if (updatedAt <= 0L) return OFFLINE
 
         return when (rawStatus) {
-            ONLINE -> if (now - updatedAt <= ONLINE_STALE_AFTER_MS) ONLINE else CLOSED
-            MINIMIZED -> if (now - updatedAt <= MINIMIZED_STALE_AFTER_MS) MINIMIZED else CLOSED
-            CLOSED -> CLOSED
-            else -> CLOSED
+            ONLINE -> if (now - updatedAt <= ONLINE_STALE_AFTER_MS) ONLINE else OFFLINE
+            IDLE, MINIMIZED -> if (now - updatedAt <= MINIMIZED_STALE_AFTER_MS) IDLE else OFFLINE
+            OFFLINE, CLOSED -> OFFLINE
+            else -> OFFLINE
         }
     }
 
@@ -32,21 +42,30 @@ object UserPresence {
         resolveStatus(
             rawStatus = user.presenceStatus,
             updatedAt = user.presenceUpdatedAt,
+            presenceMode = user.presenceMode,
             now = now,
         )
 
     fun statusColor(status: String): Color =
         when (status) {
             ONLINE -> Color(0xFF35C759)
-            MINIMIZED -> Color(0xFFFFCC00)
+            IDLE, MINIMIZED -> Color(0xFFFFCC00)
             else -> Color(0xFF8E8E93)
         }
 
     fun statusLabel(status: String): String =
         when (status) {
             ONLINE -> "Online"
-            MINIMIZED -> "Idle"
+            IDLE, MINIMIZED -> "Idle"
             else -> "Offline"
+        }
+
+    fun statusForMode(presenceMode: String): String =
+        when (presenceMode) {
+            ONLINE -> ONLINE
+            IDLE, MINIMIZED -> IDLE
+            OFFLINE, CLOSED -> OFFLINE
+            else -> ONLINE
         }
 
     fun update(userId: String, status: String) {
