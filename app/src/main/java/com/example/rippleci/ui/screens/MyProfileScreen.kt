@@ -55,6 +55,7 @@ import coil.compose.AsyncImage
 import com.example.rippleci.data.CsuciClassYears
 import com.example.rippleci.data.CsuciClubs
 import com.example.rippleci.data.CsuciMajors
+import com.example.rippleci.data.UserPresence
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
@@ -83,7 +84,17 @@ fun ProfileScreen(onSignOut: () -> Unit) {
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf("public") }
+    var presenceMode by remember { mutableStateOf(UserPresence.AUTOMATIC) }
     var classExpanded by remember { mutableStateOf(false) }
+    var presenceExpanded by remember { mutableStateOf(false) }
+
+    val presenceModeOptions =
+        listOf(
+            UserPresence.AUTOMATIC to "Automatic",
+            UserPresence.ONLINE to "Online",
+            UserPresence.IDLE to "Idle",
+            UserPresence.OFFLINE to "Offline",
+        )
 
     val filteredMajors = remember(majorQuery) {
         if (majorQuery.isBlank()) {
@@ -146,6 +157,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                             ?: ""
                     profilePictureUrl = doc.getString("profilePictureUrl") ?: ""
                     visibility = doc.getString("visibility") ?: "public"
+                    presenceMode = doc.getString("presenceMode") ?: UserPresence.AUTOMATIC
                 }
         }
     }
@@ -394,6 +406,39 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 onValueChange = { visibility = it },
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = presenceExpanded,
+                onExpandedChange = { presenceExpanded = !presenceExpanded },
+            ) {
+                OutlinedTextField(
+                    value = presenceModeOptions.firstOrNull { it.first == presenceMode }?.second ?: "Automatic",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Status") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = presenceExpanded)
+                    },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    singleLine = true,
+                )
+                ExposedDropdownMenu(
+                    expanded = presenceExpanded,
+                    onDismissRequest = { presenceExpanded = false },
+                ) {
+                    presenceModeOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.second) },
+                            onClick = {
+                                presenceMode = option.first
+                                presenceExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
@@ -416,6 +461,9 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                                 "classes" to classValues,
                                 "profilePictureUrl" to profilePictureUrl,
                                 "visibility" to visibility,
+                                "presenceMode" to presenceMode,
+                                "presenceStatus" to UserPresence.statusForMode(presenceMode),
+                                "presenceUpdatedAt" to System.currentTimeMillis(),
                             )
 
                         db.collection("users").document(uid)

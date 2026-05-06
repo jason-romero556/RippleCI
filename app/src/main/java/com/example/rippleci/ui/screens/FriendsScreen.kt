@@ -16,6 +16,7 @@ import com.example.rippleci.data.CsuciClassYears
 import com.example.rippleci.data.CsuciClubs
 import com.example.rippleci.data.CsuciMajors
 import com.example.rippleci.data.canViewProfile
+import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
@@ -60,6 +61,8 @@ fun FriendsScreen(
     var friendIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var currentUserName by remember { mutableStateOf("") }
+    var incomingRequestSenderNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var isSearching by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var pendingGroupInvites by remember { mutableStateOf<List<UserGroupInvite>>(emptyList()) }
@@ -83,6 +86,7 @@ fun FriendsScreen(
         currentUserId.let { uid ->
             db.collection("users").document(uid)
                 .addSnapshotListener { doc, _ ->
+                    currentUserName = doc?.getString("name").orEmpty()
                     val ids = (doc?.get("friends") as? List<*>)
                         ?.mapNotNull { it as? String } ?: emptyList()
                     friendIds = ids
@@ -108,7 +112,35 @@ fun FriendsScreen(
                 .whereEqualTo("toUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    incomingRequests = snapshot?.documents?.map { it.toFriendRequest() } ?: emptyList()
+                    val requests = snapshot?.documents?.map { it.toFriendRequest() } ?: emptyList()
+                    val fallbackNames =
+                        requests.associate { request ->
+                            request.fromUserId to firstNameFromCandidates(request.fromUserName)
+                        }
+
+                    incomingRequests = requests
+                    incomingRequestSenderNames = fallbackNames
+
+                    requests
+                        .map { it.fromUserId }
+                        .filter { it.isNotBlank() }
+                        .distinct()
+                        .chunked(10)
+                        .forEach { senderIds ->
+                            db.collection("users")
+                                .whereIn("__name__", senderIds)
+                                .get()
+                                .addOnSuccessListener { result ->
+                                    val fetchedNames =
+                                        result.documents.associate { doc ->
+                                            doc.id to firstNameFromCandidates(
+                                                doc.getString("name"),
+                                                fallbackNames[doc.id],
+                                            )
+                                        }
+                                    incomingRequestSenderNames = incomingRequestSenderNames + fetchedNames
+                                }
+                        }
                 }
 
             db.collection("userGroups")
@@ -331,6 +363,10 @@ fun FriendsScreen(
                     } else {
                         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                             incomingRequests.forEach { request ->
+                                val senderFirstName =
+                                    incomingRequestSenderNames[request.fromUserId]
+                                        ?: firstNameFromCandidates(request.fromUserName)
+
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -347,7 +383,7 @@ fun FriendsScreen(
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(request.fromUserName, style = MaterialTheme.typography.titleMedium)
+                                            Text(senderFirstName, style = MaterialTheme.typography.titleMedium)
                                             Text(
                                                 "Wants to be your friend",
                                                 style = MaterialTheme.typography.bodySmall,
@@ -581,10 +617,10 @@ fun FriendsScreen(
                                         val uid = currentUserId
                                         val request = hashMapOf(
                                             "fromUserId" to uid,
-                                            "fromUserName" to (auth.currentUser?.displayName?.takeIf { it.isNotBlank() }
-                                                ?: user.name.takeIf { it.isNotBlank() }
-                                                ?: auth.currentUser?.email
-                                                ?: "Someone"),
+                                            "fromUserName" to firstNameFromCandidates(
+                                                currentUserName,
+                                                auth.currentUser?.displayName,
+                                            ),
                                             "toUserId" to user.id,
                                             "status" to "pending",
                                             "timestamp" to System.currentTimeMillis(),

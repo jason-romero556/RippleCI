@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                             themeViewModel = themeViewModel,
                             onSignOut = {
                                 currentUserId?.let { userId ->
-                                    UserPresence.update(userId, UserPresence.CLOSED)
+                                    UserPresence.update(userId, UserPresence.OFFLINE)
                                 }
                                 auth.signOut()
                                 currentUserId = null
@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        updatePresence(UserPresence.MINIMIZED)
+        updatePresence(UserPresence.IDLE)
         stopPresenceHeartbeat()
         super.onStop()
     }
