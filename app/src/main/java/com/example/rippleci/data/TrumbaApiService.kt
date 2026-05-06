@@ -1,5 +1,6 @@
 package com.example.rippleci.data
 
+import com.example.rippleci.data.models.SchoolEvent
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,13 +17,15 @@ interface TrumbaApiService {
 object RetrofitInstance {
     private const val BASE_URL = "https://25livepub.collegenet.com/"
 
-    private val json = Json {
-        ignoreUnknownKeys = true // Good practice to ignore unknown fields from API
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true // Good practice to ignore unknown fields from API
+        }
 
     val api: TrumbaApiService by lazy {
         val contentType = "application/json".toMediaType()
-        Retrofit.Builder()
+        Retrofit
+            .Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()

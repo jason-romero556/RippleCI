@@ -4,22 +4,30 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.google.android.libraries.mapsplatform.secrets.gradle.plugin)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
+}
+
+configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    debug.set(true)
+    verbose.set(true)
 }
 
 android {
     namespace = "com.example.rippleci"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version =
+            release(36) {
+                minorApiLevel = 1
+            }
     }
 
     defaultConfig {
         applicationId = "com.example.rippleci"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        manifestPlaceholders["MAPS_API_KEY"] = project.findProperty("MAPS_API_KEY") as? String ?: ""
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -29,7 +37,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
@@ -50,8 +58,10 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
-    implementation("com.google.maps.android:maps-compose:4.4.1") //Added by Sameen
-    implementation("com.google.accompanist:accompanist-permissions:0.34.0") //Added by Sameen
+    implementation("com.google.maps.android:maps-compose:4.4.1") // Added by Sameen
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0") // Added by Sameen
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    implementation(libs.firebase.messaging)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -82,4 +92,5 @@ dependencies {
     // KotlinX Serialization (For parsing the JSON into your SchoolEvent class)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation(libs.androidx.datastore.preferences)
 }
