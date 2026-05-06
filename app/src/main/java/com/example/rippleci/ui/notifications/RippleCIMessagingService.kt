@@ -8,6 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.example.rippleci.MainActivity
 import com.example.rippleci.R
+import com.example.rippleci.ui.messages.ActiveConversationTracker
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService

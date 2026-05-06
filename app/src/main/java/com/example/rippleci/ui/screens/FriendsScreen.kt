@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendsScreen(
+    requestedSelectedTab: Int? = null,
+    onSelectedTabRequestHandled: () -> Unit = {},
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
     onOpenUserProfile: (String) -> Unit = {},
     onOpenUserGroupProfile: (String) -> Unit = {},
@@ -174,6 +176,8 @@ fun FriendsScreen(
     var friendIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var currentUserName by remember { mutableStateOf("") }
+    var incomingRequestSenderNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var isSearching by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var pendingGroupInvites by remember { mutableStateOf<List<UserGroupInvite>>(emptyList()) }
@@ -183,23 +187,22 @@ fun FriendsScreen(
     var groupDescription by remember { mutableStateOf("") }
     var groupVisibility by remember { mutableStateOf("public") }
 
-    val filteredMajors =
-        remember(majorQuery) {
-            if (majorQuery.isBlank()) {
-                emptyList()
-            } else {
-                CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
-            }
+    LaunchedEffect(requestedSelectedTab) {
+        requestedSelectedTab?.let { tabIndex ->
+            selectedTab = tabIndex
+            onSelectedTabRequestHandled()
         }
+    }
 
-    val filteredClubs =
-        remember(clubQuery) {
-            if (clubQuery.isBlank()) {
-                emptyList()
-            } else {
-                CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
-            }
-        }
+    val filteredMajors = remember(majorQuery) {
+        if (majorQuery.isBlank()) emptyList()
+        else CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+    }
+
+    val filteredClubs = remember(clubQuery) {
+        if (clubQuery.isBlank()) emptyList()
+        else CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+    }
 
     LaunchedEffect(currentUserId) {
         currentUserId.let { uid ->
@@ -302,59 +305,34 @@ fun FriendsScreen(
 
     fun runStudentSearch() {
         val query = searchQuery.trim().lowercase()
-        val hasCriteria =
-            query.isNotBlank() ||
-                selectedMajor.isNotBlank() ||
-                selectedClub.isNotBlank() ||
-                selectedClass.isNotBlank()
-
-        if (!hasCriteria) {
-            searchResults = emptyList()
-            return
-        }
-
+        val hasCriteria = query.isNotBlank() || selectedMajor.isNotBlank() ||
+                selectedClub.isNotBlank() || selectedClass.isNotBlank()
+        if (!hasCriteria) { searchResults = emptyList(); return }
         isSearching = true
-        db
-            .collection("users")
-            .get()
+        db.collection("users").get()
             .addOnSuccessListener { result ->
-                searchResults =
-                    result.documents
-                        .filter { doc ->
-                            if (doc.id == currentUserId) return@filter false
-
-                            val name = doc.getString("name").orEmpty()
-                            val email = doc.getString("email").orEmpty()
-                            val major = doc.getString("major").orEmpty()
-                            val clubs = (doc.get("clubs") as? List<*>)?.map { it.toString() } ?: emptyList()
-                            val classYear = doc.getString("classYear").orEmpty()
-                            val classes = (doc.get("classes") as? List<*>)?.map { it.toString() } ?: emptyList()
-                            val classValues = (classes + classYear).filter { it.isNotBlank() }
-
-                            val textMatch =
-                                query.isBlank() ||
-                                    name.lowercase().contains(query) ||
-                                    email.lowercase().contains(query) ||
-                                    major.lowercase().contains(query) ||
-                                    clubs.any { it.lowercase().contains(query) } ||
-                                    classValues.any { it.lowercase().contains(query) }
-                            val majorMatch = selectedMajor.isBlank() || major == selectedMajor
-                            val clubMatch = selectedClub.isBlank() || clubs.any { it == selectedClub }
-                            val classMatch = selectedClass.isBlank() || classValues.any { it == selectedClass }
-
-                            textMatch && majorMatch && clubMatch && classMatch
-                        }.map { doc -> doc.toUserProfile() }
-                        .filter { profile ->
-                            canViewProfile(
-                                profile = profile,
-                                currentUserId = currentUserId,
-                                currentUserFriendIds = friendIds,
-                            )
-                        }
+                searchResults = result.documents
+                    .filter { doc ->
+                        if (doc.id == currentUserId) return@filter false
+                        val name = doc.getString("name").orEmpty()
+                        val email = doc.getString("email").orEmpty()
+                        val major = doc.getString("major").orEmpty()
+                        val clubs = (doc.get("clubs") as? List<*>)?.map { it.toString() } ?: emptyList()
+                        val classYear = doc.getString("classYear").orEmpty()
+                        val classes = (doc.get("classes") as? List<*>)?.map { it.toString() } ?: emptyList()
+                        val classValues = (classes + classYear).filter { it.isNotBlank() }
+                        val textMatch = query.isBlank() || name.lowercase().contains(query) ||
+                                email.lowercase().contains(query) || major.lowercase().contains(query) ||
+                                clubs.any { it.lowercase().contains(query) } ||
+                                classValues.any { it.lowercase().contains(query) }
+                        val majorMatch = selectedMajor.isBlank() || major == selectedMajor
+                        val clubMatch = selectedClub.isBlank() || clubs.any { it == selectedClub }
+                        val classMatch = selectedClass.isBlank() || classValues.any { it == selectedClass }
+                        textMatch && majorMatch && clubMatch && classMatch
+                    }.map { it.toUserProfile() }
+                    .filter { profile -> canViewProfile(profile, currentUserId, friendIds) }
                 isSearching = false
-            }.addOnFailureListener {
-                isSearching = false
-            }
+            }.addOnFailureListener { isSearching = false }
     }
 
     if (showCreateGroupDialog) {
@@ -519,11 +497,11 @@ fun FriendsScreen(
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
-                                        text = invite.userGroupName.ifBlank { "Group invite" },
+                                        invite.userGroupName.ifBlank { "Group invite" },
                                         style = MaterialTheme.typography.titleMedium,
                                     )
                                     Text(
-                                        text = "Invited by ${invite.fromUserName.ifBlank { invite.fromUserId.ifBlank { "Unknown user" } }}",
+                                        "Invited by ${invite.fromUserName.ifBlank { invite.fromUserId.ifBlank { "Unknown user" } }}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary,
                                     )
@@ -576,34 +554,27 @@ fun FriendsScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = majorQuery,
-                                onValueChange = {
-                                    majorQuery = it
-                                    selectedMajor = ""
-                                },
+                                onValueChange = { majorQuery = it; selectedMajor = "" },
                                 label = { Text("Major") },
                                 placeholder = { Text("Type to search...") },
                                 isError = majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty(),
                                 supportingText = {
-                                    if (majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty()) {
+                                    if (majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty())
                                         Text("No matching major found")
-                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
                             DropdownMenu(
                                 expanded = majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isNotEmpty(),
-                                onDismissRequest = { },
+                                onDismissRequest = {},
                                 properties = PopupProperties(focusable = false),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 filteredMajors.forEach { major ->
                                     DropdownMenuItem(
                                         text = { Text(major) },
-                                        onClick = {
-                                            selectedMajor = major
-                                            majorQuery = major
-                                        },
+                                        onClick = { selectedMajor = major; majorQuery = major },
                                     )
                                 }
                             }
@@ -615,34 +586,27 @@ fun FriendsScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = clubQuery,
-                                onValueChange = {
-                                    clubQuery = it
-                                    selectedClub = ""
-                                },
+                                onValueChange = { clubQuery = it; selectedClub = "" },
                                 label = { Text("Club") },
                                 placeholder = { Text("Type to search...") },
                                 isError = clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty(),
                                 supportingText = {
-                                    if (clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty()) {
+                                    if (clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty())
                                         Text("No matching club found")
-                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                             )
                             DropdownMenu(
                                 expanded = clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isNotEmpty(),
-                                onDismissRequest = { },
+                                onDismissRequest = {},
                                 properties = PopupProperties(focusable = false),
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 filteredClubs.forEach { club ->
                                     DropdownMenuItem(
                                         text = { Text(club) },
-                                        onClick = {
-                                            selectedClub = club
-                                            clubQuery = club
-                                        },
+                                        onClick = { selectedClub = club; clubQuery = club },
                                     )
                                 }
                             }

@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.rippleci.data.UserPresence
 import com.example.rippleci.ui.auth.LoginScreen
 import com.example.rippleci.ui.main.MainApp
+import com.example.rippleci.ui.notifications.NotificationNavigationTarget
 import com.example.rippleci.ui.theme.RippleCITheme
 import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var presenceHeartbeatJob: Job? = null
+    private var notificationNavigationTarget by mutableStateOf<NotificationNavigationTarget?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
 
     // These are mutable so onNewIntent can update them and Compose recomposes
@@ -65,6 +67,10 @@ class MainActivity : ComponentActivity() {
                     if (user != null) {
                         MainApp(
                             themeViewModel = themeViewModel,
+                            notificationNavigationTarget = notificationNavigationTarget,
+                            onNotificationNavigationHandled = {
+                                notificationNavigationTarget = null
+                            },
                             onSignOut = {
                                 Firebase.auth.signOut()
                                 user = null

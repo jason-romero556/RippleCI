@@ -29,6 +29,7 @@ fun DocumentSnapshot.toUserProfile(): UserProfile {
         classes = classes,
         friendIds = (get("friends") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
+        presenceMode = getString("presenceMode").orEmpty().ifBlank { "automatic" },
         presenceStatus = getString("presenceStatus").orEmpty().ifBlank { "closed" },
         presenceUpdatedAt = getLong("presenceUpdatedAt") ?: 0L,
         visibility = getString("visibility") ?: "public",

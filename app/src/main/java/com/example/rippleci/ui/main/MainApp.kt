@@ -30,6 +30,7 @@ import com.example.rippleci.ui.events.EventsScreen
 import com.example.rippleci.ui.messages.ConversationScreen
 import com.example.rippleci.ui.messages.MessagesScreen
 import com.example.rippleci.ui.messages.MessagesViewModel
+import com.example.rippleci.ui.notifications.NotificationNavigationTarget
 import com.example.rippleci.ui.screens.ClubProfileScreen
 import com.example.rippleci.ui.screens.EventProfileScreen
 import com.example.rippleci.ui.screens.FriendsScreen
@@ -47,6 +48,8 @@ import com.google.firebase.auth.auth
 @Composable
 fun MainApp(
     themeViewModel: ThemeViewModel,
+    notificationNavigationTarget: NotificationNavigationTarget? = null,
+    onNotificationNavigationHandled: () -> Unit = {},
     onSignOut: () -> Unit,
     navigateTo: String? = null,
     conversationId: String? = null
@@ -91,6 +94,35 @@ fun MainApp(
         )
     } else {
         NavigationSuiteDefaults.colors()
+    }
+
+    LaunchedEffect(notificationNavigationTarget) {
+        val target = notificationNavigationTarget ?: return@LaunchedEffect
+
+        when (target.navigateTo) {
+            "friends" -> {
+                routeStack = emptyList()
+                currentDestination = AppDestinations.FRIENDS
+                requestedFriendsTab = 1
+            }
+
+            "messages" -> {
+                currentDestination = AppDestinations.MESSAGES
+                if (target.conversationId.isBlank()) {
+                    routeStack = emptyList()
+                } else {
+                    routeStack =
+                        listOf(
+                            AppRoute.Conversation(
+                                conversationId = target.conversationId,
+                                title = target.title.ifBlank { "Conversation" },
+                            ),
+                        )
+                }
+            }
+        }
+
+        onNotificationNavigationHandled()
     }
 
     val usesAppPalette = themeViewModel.appTheme != AppTheme.DYNAMIC
@@ -220,6 +252,10 @@ fun MainApp(
 
                             AppDestinations.FRIENDS -> {
                                 FriendsScreen(
+                                    requestedSelectedTab = requestedFriendsTab,
+                                    onSelectedTabRequestHandled = {
+                                        requestedFriendsTab = null
+                                    },
                                     onOpenConversation = { conversationId, convName ->
                                         route = AppRoute.Conversation(conversationId, convName)
                                     },

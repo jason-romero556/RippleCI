@@ -95,6 +95,7 @@ exports.sendMessageNotification = onDocumentCreated(
         : [];
 
       const recipients = participants.filter((uid) => uid !== senderId);
+      const activeConversationFreshAfterMs = 2 * 60 * 1000;
 
       const notifications = recipients.map(async (recipientId) => {
         const recipientDoc = await admin.firestore()
@@ -120,13 +121,12 @@ exports.sendMessageNotification = onDocumentCreated(
 
         return admin.messaging().send({
           token: fcmToken,
-          notification: {
-            title: senderName,
-            body: bodyText,
-          },
           data: {
             conversationId: convId,
             senderId: senderId,
+            title: senderName,
+            body: bodyText,
+            type: "message",
           },
           android: {
             priority: "high",
