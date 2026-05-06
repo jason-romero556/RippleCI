@@ -407,14 +407,20 @@ fun FriendsScreen(
                                     },
                                     onAddFriend = {},
                                     onRemoveFriend = {
-                                        db
-                                            .collection("users")
-                                            .document(currentUserId)
-                                            .update(
+                                        if (currentUserId.isNotBlank()) {
+                                            val batch = db.batch()
+                                            batch.update(
+                                                db.collection("users").document(currentUserId),
                                                 "friends",
-                                                com.google.firebase.firestore.FieldValue
-                                                    .arrayRemove(user.id),
+                                                FieldValue.arrayRemove(user.id),
                                             )
+                                            batch.update(
+                                                db.collection("users").document(user.id),
+                                                "friends",
+                                                FieldValue.arrayRemove(currentUserId),
+                                            )
+                                            batch.commit()
+                                        }
                                     },
                                     onMessage = {
                                         val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
@@ -803,16 +809,19 @@ fun FriendsScreen(
                                         }
                                     },
                                     onRemoveFriend = {
-                                        currentUserId.let { uid ->
-                                            db
-                                                .collection("users")
-                                                .document(uid)
-                                                .update(
-                                                    "friends",
-                                                    com.google.firebase.firestore.FieldValue.arrayRemove(
-                                                        user.id,
-                                                    ),
-                                                )
+                                        if (currentUserId.isNotBlank()) {
+                                            val batch = db.batch()
+                                            batch.update(
+                                                db.collection("users").document(currentUserId),
+                                                "friends",
+                                                FieldValue.arrayRemove(user.id),
+                                            )
+                                            batch.update(
+                                                db.collection("users").document(user.id),
+                                                "friends",
+                                                FieldValue.arrayRemove(currentUserId),
+                                            )
+                                            batch.commit()
                                         }
                                     },
                                     onMessage = {
