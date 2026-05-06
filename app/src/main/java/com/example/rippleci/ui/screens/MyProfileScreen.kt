@@ -4,7 +4,19 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -12,8 +24,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,10 +52,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
+import com.example.rippleci.data.CsuciClassYears
+import com.example.rippleci.data.CsuciClubs
+import com.example.rippleci.data.CsuciMajors
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 import com.google.firebase.storage.storage
 
@@ -153,6 +188,23 @@ fun ProfileScreen(onSignOut: () -> Unit) {
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf("public") }
+    var classExpanded by remember { mutableStateOf(false) }
+
+    val filteredMajors = remember(majorQuery) {
+        if (majorQuery.isBlank()) {
+            emptyList()
+        } else {
+            CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+        }
+    }
+
+    val filteredClubs = remember(clubQuery, selectedClubs) {
+        if (clubQuery.isBlank()) {
+            emptyList()
+        } else {
+            CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+        }
+    }
 
     var classExpanded by remember { mutableStateOf(false) }
 

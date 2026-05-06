@@ -183,6 +183,24 @@ fun FriendsScreen(
     var groupDescription by remember { mutableStateOf("") }
     var groupVisibility by remember { mutableStateOf("public") }
 
+    val filteredMajors =
+        remember(majorQuery) {
+            if (majorQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+            }
+        }
+
+    val filteredClubs =
+        remember(clubQuery) {
+            if (clubQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+            }
+        }
+
     LaunchedEffect(currentUserId) {
         currentUserId.let { uid ->
             db.collection("users").document(uid).addSnapshotListener { doc, _ ->
@@ -280,6 +298,63 @@ fun FriendsScreen(
             groupVisibility = "public"
             showCreateGroupDialog = false
         }
+    }
+
+    fun runStudentSearch() {
+        val query = searchQuery.trim().lowercase()
+        val hasCriteria =
+            query.isNotBlank() ||
+                selectedMajor.isNotBlank() ||
+                selectedClub.isNotBlank() ||
+                selectedClass.isNotBlank()
+
+        if (!hasCriteria) {
+            searchResults = emptyList()
+            return
+        }
+
+        isSearching = true
+        db
+            .collection("users")
+            .get()
+            .addOnSuccessListener { result ->
+                searchResults =
+                    result.documents
+                        .filter { doc ->
+                            if (doc.id == currentUserId) return@filter false
+
+                            val name = doc.getString("name").orEmpty()
+                            val email = doc.getString("email").orEmpty()
+                            val major = doc.getString("major").orEmpty()
+                            val clubs = (doc.get("clubs") as? List<*>)?.map { it.toString() } ?: emptyList()
+                            val classYear = doc.getString("classYear").orEmpty()
+                            val classes = (doc.get("classes") as? List<*>)?.map { it.toString() } ?: emptyList()
+                            val classValues = (classes + classYear).filter { it.isNotBlank() }
+
+                            val textMatch =
+                                query.isBlank() ||
+                                    name.lowercase().contains(query) ||
+                                    email.lowercase().contains(query) ||
+                                    major.lowercase().contains(query) ||
+                                    clubs.any { it.lowercase().contains(query) } ||
+                                    classValues.any { it.lowercase().contains(query) }
+                            val majorMatch = selectedMajor.isBlank() || major == selectedMajor
+                            val clubMatch = selectedClub.isBlank() || clubs.any { it == selectedClub }
+                            val classMatch = selectedClass.isBlank() || classValues.any { it == selectedClass }
+
+                            textMatch && majorMatch && clubMatch && classMatch
+                        }.map { doc -> doc.toUserProfile() }
+                        .filter { profile ->
+                            canViewProfile(
+                                profile = profile,
+                                currentUserId = currentUserId,
+                                currentUserFriendIds = friendIds,
+                            )
+                        }
+                isSearching = false
+            }.addOnFailureListener {
+                isSearching = false
+            }
     }
 
     if (showCreateGroupDialog) {
