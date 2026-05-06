@@ -165,8 +165,7 @@ fun MainApp(
                                             ),
                                     )
                                 },
-                            )
-                            .statusBarsPadding()
+                            ).statusBarsPadding()
                             .height(56.dp)
                             .fillMaxWidth(),
                 )
