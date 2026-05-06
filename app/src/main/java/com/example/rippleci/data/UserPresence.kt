@@ -6,6 +6,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
 
 object UserPresence {
+    const val AUTOMATIC = "automatic"
     const val ONLINE = "online"
     const val MINIMIZED = "minimized"
     const val CLOSED = "closed"
@@ -29,11 +30,15 @@ object UserPresence {
     }
 
     fun resolveStatus(user: UserProfile, now: Long = System.currentTimeMillis()): String =
-        resolveStatus(
-            rawStatus = user.presenceStatus,
-            updatedAt = user.presenceUpdatedAt,
-            now = now,
-        )
+        when (user.presenceAppearance) {
+            ONLINE, MINIMIZED, CLOSED -> user.presenceAppearance
+            else ->
+                resolveStatus(
+                    rawStatus = user.presenceStatus,
+                    updatedAt = user.presenceUpdatedAt,
+                    now = now,
+                )
+        }
 
     fun statusColor(status: String): Color =
         when (status) {
@@ -47,6 +52,12 @@ object UserPresence {
             ONLINE -> "Online"
             MINIMIZED -> "Idle"
             else -> "Offline"
+        }
+
+    fun appearanceLabel(appearance: String): String =
+        when (appearance) {
+            AUTOMATIC, "" -> "Automatic"
+            else -> statusLabel(appearance)
         }
 
     fun update(userId: String, status: String) {

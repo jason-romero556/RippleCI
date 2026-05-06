@@ -2,7 +2,7 @@ package com.example.rippleci.ui.messages
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.Message
 import com.example.rippleci.ui.components.HelpfulLinksMenuButton
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,18 +29,56 @@ fun ConversationScreen(
     viewModel: MessagesViewModel = viewModel(),
 ) {
     val messages by viewModel.messages.collectAsState()
+    val activeConversation by viewModel.activeConversation.collectAsState()
     var messageText by remember { mutableStateOf("") }
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var lastTypingUpdateAt by remember { mutableStateOf(0L) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val typingTimeoutMillis = 10_000L
+    val isSomeoneTyping =
+        activeConversation
+            ?.typingUsers
+            ?.any { (userId, updatedAt) ->
+                userId != viewModel.currentUserId && nowMillis - updatedAt <= typingTimeoutMillis
+            } == true
+    val latestOutgoingMessageId =
+        messages
+            .lastOrNull { it.senderId == viewModel.currentUserId }
+            ?.messageId
 
     LaunchedEffect(conversationId) {
         viewModel.loadMessages(conversationId)
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
+    DisposableEffect(conversationId) {
+        onDispose {
+            viewModel.leaveConversation(conversationId)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000L)
+            nowMillis = System.currentTimeMillis()
+        }
+    }
+
+    LaunchedEffect(conversationId, messages.lastOrNull()?.messageId) {
+        viewModel.markConversationRead(conversationId)
+    }
+
+    LaunchedEffect(messages.lastOrNull()?.messageId, isSomeoneTyping) {
+        val targetIndex =
+            when {
+                isSomeoneTyping -> messages.size
+                messages.isNotEmpty() -> messages.lastIndex
+                else -> -1
+            }
+
+        if (targetIndex >= 0) {
             scope.launch {
-                listState.animateScrollToItem(messages.size - 1)
+                listState.animateScrollToItem(targetIndex)
             }
         }
     }
@@ -89,7 +128,19 @@ fun ConversationScreen(
             ) {
                 OutlinedTextField(
                     value = messageText,
-                    onValueChange = { messageText = it },
+                    onValueChange = { newText ->
+                        val wasTyping = messageText.isNotBlank()
+                        messageText = newText
+
+                        val now = System.currentTimeMillis()
+                        if (newText.isBlank()) {
+                            lastTypingUpdateAt = 0L
+                            viewModel.updateTypingStatus(conversationId, false)
+                        } else if (!wasTyping || now - lastTypingUpdateAt > 3_000L) {
+                            lastTypingUpdateAt = now
+                            viewModel.updateTypingStatus(conversationId, true)
+                        }
+                    },
                     placeholder = { Text("Type a message...") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(24.dp),
@@ -100,6 +151,8 @@ fun ConversationScreen(
                         val trimmed = messageText.trim()
                         if (trimmed.isNotEmpty()) {
                             viewModel.sendMessage(conversationId, trimmed)
+                            viewModel.updateTypingStatus(conversationId, false)
+                            lastTypingUpdateAt = 0L
                             messageText = ""
                         }
                     },
@@ -122,11 +175,26 @@ fun ConversationScreen(
                     .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(messages) { message ->
+            itemsIndexed(
+                items = messages,
+                key = { _, message -> message.messageId },
+            ) { _, message ->
                 MessageBubble(
                     message = message,
                     isFromMe = message.senderId == viewModel.currentUserId,
+                    readReceiptText =
+                        if (message.messageId == latestOutgoingMessageId) {
+                            viewModel.readReceiptText(message)
+                        } else {
+                            null
+                        },
                 )
+            }
+
+            if (isSomeoneTyping) {
+                item(key = "typing-indicator") {
+                    TypingIndicator()
+                }
             }
         }
     }
@@ -136,6 +204,7 @@ fun ConversationScreen(
 fun MessageBubble(
     message: Message,
     isFromMe: Boolean,
+    readReceiptText: String? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -173,7 +242,43 @@ fun MessageBubble(
                         MaterialTheme.colorScheme.onPrimary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                },
+            )
+        }
+
+        if (isFromMe && !readReceiptText.isNullOrBlank()) {
+            Text(
+                text = readReceiptText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(top = 2.dp, end = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+fun TypingIndicator() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Surface(
+            shape =
+                RoundedCornerShape(
+                    topStart = 16.dp,
+                    topEnd = 16.dp,
+                    bottomStart = 4.dp,
+                    bottomEnd = 16.dp,
+                ),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.widthIn(max = 72.dp),
+        ) {
+            Text(
+                text = "...",
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
             )
         }
     }

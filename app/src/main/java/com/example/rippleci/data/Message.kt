@@ -5,7 +5,7 @@ data class Message(
     val senderId: String = "",
     val senderName: String = "",
     val text: String = "",
-    val timestamp: Long = 0L
+    val timestamp: Long = 0L,
 )
 
 data class Conversation(
@@ -15,6 +15,7 @@ data class Conversation(
     val isGroup: Boolean = false,
     val groupName: String = "",
     val lastMessage: String = "",
-    val lastUpdated: Long = 0L
+    val lastUpdated: Long = 0L,
+    val typingUsers: Map<String, Long> = emptyMap(),
+    val readReceipts: Map<String, Long> = emptyMap(),
 )
-

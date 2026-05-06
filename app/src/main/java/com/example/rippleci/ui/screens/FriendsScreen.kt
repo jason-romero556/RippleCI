@@ -60,6 +60,8 @@ fun FriendsScreen(
     var friendIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var requestSenderNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var currentUserName by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var pendingGroupInvites by remember { mutableStateOf<List<UserGroupInvite>>(emptyList()) }
@@ -93,6 +95,13 @@ fun FriendsScreen(
                 .collection("users")
                 .document(uid)
                 .addSnapshotListener { doc, _ ->
+                    currentUserName =
+                        doc
+                            ?.getString("name")
+                            .orEmpty()
+                            .ifBlank { auth.currentUser?.displayName.orEmpty() }
+                            .ifBlank { "Unknown user" }
+
                     val ids =
                         (doc?.get("friends") as? List<*>)
                             ?.mapNotNull { it as? String } ?: emptyList()
@@ -150,6 +159,59 @@ fun FriendsScreen(
                         snapshot?.documents?.map { it.toUserGroupInvite() } ?: emptyList()
                 }
         }
+    }
+
+    LaunchedEffect(incomingRequests) {
+        val senderIds =
+            incomingRequests
+                .map { it.fromUserId }
+                .filter { it.isNotBlank() }
+                .distinct()
+
+        if (senderIds.isEmpty()) {
+            requestSenderNames = emptyMap()
+            return@LaunchedEffect
+        }
+
+        val senderNames = mutableMapOf<String, String>()
+        val chunks = senderIds.chunked(10)
+        var pendingChunks = chunks.size
+
+        chunks.forEach { chunk ->
+            db
+                .collection("users")
+                .whereIn("__name__", chunk)
+                .get()
+                .addOnSuccessListener { result ->
+                    result.documents.forEach { doc ->
+                        val displayName =
+                            doc
+                                .getString("name")
+                                .orEmpty()
+
+                        if (displayName.isNotBlank()) {
+                            senderNames[doc.id] = displayName
+                        }
+                    }
+                }.addOnCompleteListener {
+                    pendingChunks -= 1
+                    if (pendingChunks == 0) {
+                        requestSenderNames = senderNames
+                    }
+                }
+        }
+    }
+
+    fun removeFriend(friendId: String) {
+        if (currentUserId.isBlank() || friendId.isBlank()) return
+
+        val batch = db.batch()
+        val currentUserRef = db.collection("users").document(currentUserId)
+        val friendRef = db.collection("users").document(friendId)
+
+        batch.update(currentUserRef, "friends", FieldValue.arrayRemove(friendId))
+        batch.update(friendRef, "friends", FieldValue.arrayRemove(currentUserId))
+        batch.commit()
     }
 
     fun acceptGroupInvite(invite: UserGroupInvite) {
@@ -407,14 +469,7 @@ fun FriendsScreen(
                                     },
                                     onAddFriend = {},
                                     onRemoveFriend = {
-                                        db
-                                            .collection("users")
-                                            .document(currentUserId)
-                                            .update(
-                                                "friends",
-                                                com.google.firebase.firestore.FieldValue
-                                                    .arrayRemove(user.id),
-                                            )
+                                        removeFriend(user.id)
                                     },
                                     onMessage = {
                                         val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
@@ -450,7 +505,13 @@ fun FriendsScreen(
                         ) {
                             incomingRequests.forEach { request ->
                                 val fromUserId = request.fromUserId
-                                val fromUserName = request.fromUserName
+                                val storedSenderName =
+                                    request.fromUserName
+                                        .takeUnless { it.contains("@") }
+                                        .orEmpty()
+                                val fromUserName =
+                                    requestSenderNames[fromUserId]
+                                        ?: storedSenderName.ifBlank { "Unknown user" }
 
                                 Card(
                                     modifier =
@@ -794,7 +855,10 @@ fun FriendsScreen(
                                             val request =
                                                 hashMapOf(
                                                     "fromUserId" to uid,
-                                                    "fromUserName" to (auth.currentUser?.email ?: ""),
+                                                    "fromUserName" to currentUserName.ifBlank {
+                                                        auth.currentUser?.displayName
+                                                            ?: "Unknown user"
+                                                    },
                                                     "toUserId" to user.id,
                                                     "status" to "pending",
                                                     "timestamp" to System.currentTimeMillis(),
@@ -803,17 +867,7 @@ fun FriendsScreen(
                                         }
                                     },
                                     onRemoveFriend = {
-                                        currentUserId.let { uid ->
-                                            db
-                                                .collection("users")
-                                                .document(uid)
-                                                .update(
-                                                    "friends",
-                                                    com.google.firebase.firestore.FieldValue.arrayRemove(
-                                                        user.id,
-                                                    ),
-                                                )
-                                        }
+                                        removeFriend(user.id)
                                     },
                                     onMessage = {
                                         messagesViewModel.getOrCreateDMConversation(

@@ -66,23 +66,33 @@ fun UserGroupProfileScreen(
     var groupEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var selectedGroupEvent by remember { mutableStateOf<PersonalEvent?>(null) }
     var groupEventStatusMessage by remember { mutableStateOf("") }
+    var memberActionMessage by remember { mutableStateOf("") }
 
-    LaunchedEffect(userGroupId) {
-        db
-            .collection("userGroups")
-            .document(userGroupId)
-            .get()
-            .addOnSuccessListener { doc ->
-                userGroupName = doc.getString("name").orEmpty()
-                description = doc.getString("description").orEmpty()
-                ownerUserId = doc.getString("ownerUserId").orEmpty()
-                adminIds = (doc.get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                memberIds = (doc.get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                invitedUserIds =
-                    (doc.get("invitedUserIds") as? List<*>)
-                        ?.mapNotNull { it as? String }
-                        ?: emptyList()
-            }
+    DisposableEffect(userGroupId) {
+        val registration =
+            db
+                .collection("userGroups")
+                .document(userGroupId)
+                .addSnapshotListener { doc, error ->
+                    if (error != null) {
+                        memberActionMessage = error.message ?: "Could not load group."
+                        return@addSnapshotListener
+                    }
+
+                    if (doc == null || !doc.exists()) return@addSnapshotListener
+
+                    userGroupName = doc.getString("name").orEmpty()
+                    description = doc.getString("description").orEmpty()
+                    ownerUserId = doc.getString("ownerUserId").orEmpty()
+                    adminIds = (doc.get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                    memberIds = (doc.get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                    invitedUserIds =
+                        (doc.get("invitedUserIds") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            ?: emptyList()
+                }
+
+        onDispose { registration.remove() }
     }
 
     LaunchedEffect(memberIds) {
@@ -242,6 +252,10 @@ fun UserGroupProfileScreen(
     }
 
     fun kickMember(memberId: String) {
+        if (!canManageMembers || memberId.isBlank() || memberId == currentUserId || memberId == ownerUserId) {
+            return
+        }
+
         db
             .collection("userGroups")
             .document(userGroupId)
@@ -250,14 +264,31 @@ fun UserGroupProfileScreen(
                     "memberIds" to FieldValue.arrayRemove(memberId),
                     "adminIds" to FieldValue.arrayRemove(memberId),
                 ),
-            )
+            ).addOnSuccessListener {
+                memberIds = memberIds.filterNot { it == memberId }
+                adminIds = adminIds.filterNot { it == memberId }
+                memberProfiles = memberProfiles.filterNot { it.id == memberId }
+                memberActionMessage = "Member removed."
+            }.addOnFailureListener { error ->
+                memberActionMessage = error.message ?: "Could not remove member."
+            }
     }
 
     fun promoteToAdmin(memberId: String) {
+        if (!canManageMembers || memberId.isBlank() || !memberIds.contains(memberId)) {
+            return
+        }
+
         db
             .collection("userGroups")
             .document(userGroupId)
             .update("adminIds", FieldValue.arrayUnion(memberId))
+            .addOnSuccessListener {
+                adminIds = (adminIds + memberId).distinct()
+                memberActionMessage = "Admin added."
+            }.addOnFailureListener { error ->
+                memberActionMessage = error.message ?: "Could not make admin."
+            }
     }
 
     fun createGroupEvent(newEvent: PersonalEvent) {
@@ -689,6 +720,11 @@ fun UserGroupProfileScreen(
         Text("Members", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
+        if (memberActionMessage.isNotBlank()) {
+            Text(memberActionMessage, color = MaterialTheme.colorScheme.secondary)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         memberProfiles.forEach { member ->
             val role =
                 when {
@@ -704,7 +740,7 @@ fun UserGroupProfileScreen(
 
             if (canManageMembers && member.id != currentUserId && member.id != ownerUserId) {
                 OutlinedButton(onClick = { kickMember(member.id) }) {
-                    Text("Kick")
+                    Text("Kick Member")
                 }
 
                 if (!adminIds.contains(member.id)) {

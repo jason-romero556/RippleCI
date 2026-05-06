@@ -5,6 +5,9 @@ import com.example.rippleci.data.Conversation
 import com.example.rippleci.data.Message
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +16,10 @@ import kotlinx.coroutines.flow.StateFlow
 class MessagesViewModel : ViewModel() {
     private val db = Firebase.firestore
     private val auth = Firebase.auth
+    private var messageRegistration: ListenerRegistration? = null
+    private var conversationRegistration: ListenerRegistration? = null
+    private var activeConversationId: String = ""
+
     val currentUserId: String
         get() = auth.currentUser?.uid ?: ""
 
@@ -28,6 +35,9 @@ class MessagesViewModel : ViewModel() {
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
 
+    private val _activeConversation = MutableStateFlow<Conversation?>(null)
+    val activeConversation: StateFlow<Conversation?> = _activeConversation
+
     init {
         loadConversations()
         loadCurrentUserName()
@@ -36,8 +46,50 @@ class MessagesViewModel : ViewModel() {
     private fun resetState() {
         _conversations.value = emptyList()
         _messages.value = emptyList()
+        _activeConversation.value = null
         _currentDisplayName.value = ""
     }
+
+    private fun DocumentSnapshot.toConversation(): Conversation =
+        Conversation(
+            conversationId = id,
+            members =
+                (get("members") as? List<*>)
+                    ?.mapNotNull { it as? String } ?: emptyList(),
+            memberNames =
+                (get("memberNames") as? Map<*, *>)
+                    ?.mapNotNull { (k, v) ->
+                        if (k is String && v is String) k to v else null
+                    }?.toMap() ?: emptyMap(),
+            isGroup = getBoolean("isGroup") ?: false,
+            groupName = getString("groupName") ?: "",
+            lastMessage = getString("lastMessage") ?: "",
+            lastUpdated = getLong("lastUpdated") ?: 0L,
+            typingUsers =
+                (get("typingUsers") as? Map<*, *>)
+                    ?.mapNotNull { (k, v) ->
+                        val timestamp =
+                            when (v) {
+                                is Long -> v
+                                is Number -> v.toLong()
+                                else -> null
+                            }
+
+                        if (k is String && timestamp != null) k to timestamp else null
+                    }?.toMap() ?: emptyMap(),
+            readReceipts =
+                (get("readReceipts") as? Map<*, *>)
+                    ?.mapNotNull { (k, v) ->
+                        val timestamp =
+                            when (v) {
+                                is Long -> v
+                                is Number -> v.toLong()
+                                else -> null
+                            }
+
+                        if (k is String && timestamp != null) k to timestamp else null
+                    }?.toMap() ?: emptyMap(),
+        )
 
     private fun loadCurrentUserName() {
         if (currentUserId.isEmpty()) {
@@ -68,50 +120,127 @@ class MessagesViewModel : ViewModel() {
                 if (error != null) return@addSnapshotListener
                 val convos =
                     snapshot?.documents?.map { doc ->
-                        Conversation(
-                            conversationId = doc.id,
-                            members =
-                                (doc.get("members") as? List<*>)
-                                    ?.mapNotNull { it as? String } ?: emptyList(),
-                            memberNames =
-                                (doc.get("memberNames") as? Map<*, *>)
-                                    ?.mapNotNull { (k, v) ->
-                                        if (k is String && v is String) k to v else null
-                                    }?.toMap() ?: emptyMap(),
-                            isGroup = doc.getBoolean("isGroup") ?: false,
-                            groupName = doc.getString("groupName") ?: "",
-                            lastMessage = doc.getString("lastMessage") ?: "",
-                            lastUpdated = doc.getLong("lastUpdated") ?: 0L,
-                        )
+                        doc.toConversation()
                     } ?: emptyList()
                 _conversations.value = convos
             }
     }
 
     fun loadMessages(conversationId: String) {
+        if (conversationId == activeConversationId) return
+
+        messageRegistration?.remove()
+        conversationRegistration?.remove()
+        _messages.value = emptyList()
+        _activeConversation.value = null
+        activeConversationId = conversationId
+
+        val conversationRef =
+            db
+                .collection("conversations")
+                .document(conversationId)
+
+        conversationRegistration =
+            conversationRef
+                .addSnapshotListener { doc, error ->
+                    if (error != null) return@addSnapshotListener
+                    _activeConversation.value = doc?.takeIf { it.exists() }?.toConversation()
+                }
+
+        messageRegistration =
+            conversationRef
+                .collection("messages")
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) return@addSnapshotListener
+                    val msgs =
+                        snapshot?.documents?.map { doc ->
+                            android.util.Log.d(
+                                "MSG_DEBUG",
+                                "message senderId: ${doc.getString("senderId")} senderName: ${doc.getString("senderName")}",
+                            )
+                            Message(
+                                messageId = doc.id,
+                                senderId = doc.getString("senderId") ?: "",
+                                senderName = doc.getString("senderName") ?: "",
+                                text = doc.getString("text") ?: "",
+                                timestamp = doc.getLong("timestamp") ?: 0L,
+                            )
+                        } ?: emptyList()
+                    _messages.value = msgs
+                }
+    }
+
+    fun markConversationRead(conversationId: String) {
+        if (currentUserId.isBlank() || conversationId.isBlank()) return
+
         db
             .collection("conversations")
             .document(conversationId)
-            .collection("messages")
-            .orderBy("timestamp", Query.Direction.ASCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
-                val msgs =
-                    snapshot?.documents?.map { doc ->
-                        android.util.Log.d(
-                            "MSG_DEBUG",
-                            "message senderId: ${doc.getString("senderId")} senderName: ${doc.getString("senderName")}",
-                        )
-                        Message(
-                            messageId = doc.id,
-                            senderId = doc.getString("senderId") ?: "",
-                            senderName = doc.getString("senderName") ?: "",
-                            text = doc.getString("text") ?: "",
-                            timestamp = doc.getLong("timestamp") ?: 0L,
-                        )
-                    } ?: emptyList()
-                _messages.value = msgs
+            .update("readReceipts.$currentUserId", System.currentTimeMillis())
+    }
+
+    fun updateTypingStatus(
+        conversationId: String,
+        isTyping: Boolean,
+    ) {
+        if (currentUserId.isBlank() || conversationId.isBlank()) return
+
+        val value =
+            if (isTyping) {
+                System.currentTimeMillis()
+            } else {
+                FieldValue.delete()
             }
+
+        db
+            .collection("conversations")
+            .document(conversationId)
+            .update("typingUsers.$currentUserId", value)
+    }
+
+    fun leaveConversation(conversationId: String) {
+        if (conversationId.isNotBlank()) {
+            updateTypingStatus(conversationId, false)
+        }
+
+        if (conversationId == activeConversationId) {
+            messageRegistration?.remove()
+            conversationRegistration?.remove()
+            messageRegistration = null
+            conversationRegistration = null
+            activeConversationId = ""
+            _messages.value = emptyList()
+            _activeConversation.value = null
+        }
+    }
+
+    override fun onCleared() {
+        leaveConversation(activeConversationId)
+        super.onCleared()
+    }
+
+    fun readReceiptText(message: Message): String? {
+        val conversation = _activeConversation.value ?: return null
+        if (message.senderId != currentUserId) return null
+
+        val otherMemberIds = conversation.members.filter { it != currentUserId }
+        if (otherMemberIds.isEmpty()) return null
+
+        val readByNames =
+            otherMemberIds
+                .filter { memberId ->
+                    (conversation.readReceipts[memberId] ?: 0L) >= message.timestamp
+                }.map { memberId ->
+                    conversation.memberNames[memberId].orEmpty().ifBlank { "Someone" }
+                }
+
+        return when {
+            readByNames.isEmpty() -> null
+            otherMemberIds.size == 1 -> "Read"
+            readByNames.size == otherMemberIds.size -> "Read by everyone"
+            else -> "Read by ${readByNames.joinToString(", ")}"
+        }
     }
 
     fun sendMessage(
@@ -132,6 +261,8 @@ class MessagesViewModel : ViewModel() {
             mapOf(
                 "lastMessage" to text,
                 "lastUpdated" to System.currentTimeMillis(),
+                "typingUsers.$currentUserId" to FieldValue.delete(),
+                "readReceipts.$currentUserId" to System.currentTimeMillis(),
             ),
         )
     }

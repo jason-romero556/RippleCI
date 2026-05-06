@@ -26,6 +26,14 @@ val ProfileVisibilityOptions =
         VisibilityOption("private", "Private", "Only you can view this."),
     )
 
+val PresenceStatusOptions =
+    listOf(
+        VisibilityOption("automatic", "Automatic", "Use your app activity to show your status."),
+        VisibilityOption("online", "Online", "Show your status as online."),
+        VisibilityOption("minimized", "Idle", "Show your status as idle."),
+        VisibilityOption("closed", "Offline", "Show your status as offline."),
+    )
+
 val EventVisibilityOptions =
     listOf(
         VisibilityOption("public", "Public", "Anyone can view this event."),

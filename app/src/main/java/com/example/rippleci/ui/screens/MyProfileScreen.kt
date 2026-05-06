@@ -55,6 +55,8 @@ import coil.compose.AsyncImage
 import com.example.rippleci.data.CsuciClassYears
 import com.example.rippleci.data.CsuciClubs
 import com.example.rippleci.data.CsuciMajors
+import com.example.rippleci.data.UserPresence
+import com.example.rippleci.ui.components.PresenceStatusOptions
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
@@ -83,6 +85,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf("public") }
+    var presenceAppearance by remember { mutableStateOf(UserPresence.AUTOMATIC) }
     var classExpanded by remember { mutableStateOf(false) }
 
     val filteredMajors = remember(majorQuery) {
@@ -146,6 +149,11 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                             ?: ""
                     profilePictureUrl = doc.getString("profilePictureUrl") ?: ""
                     visibility = doc.getString("visibility") ?: "public"
+                    presenceAppearance =
+                        doc
+                            .getString("presenceAppearance")
+                            .orEmpty()
+                            .ifBlank { UserPresence.AUTOMATIC }
                 }
         }
     }
@@ -394,6 +402,15 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 onValueChange = { visibility = it },
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            VisibilitySelector(
+                title = "Status Appearance",
+                selectedValue = presenceAppearance,
+                options = PresenceStatusOptions,
+                onValueChange = { presenceAppearance = it },
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
@@ -416,6 +433,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                                 "classes" to classValues,
                                 "profilePictureUrl" to profilePictureUrl,
                                 "visibility" to visibility,
+                                "presenceAppearance" to presenceAppearance,
                             )
 
                         db.collection("users").document(uid)
@@ -448,6 +466,8 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             ProfileInfoRow(label = "Major", value = major.ifEmpty { "Not set" })
             Spacer(modifier = Modifier.height(8.dp))
             ProfileInfoRow(label = "Class Year", value = classYear.ifEmpty { "Not set" })
+            Spacer(modifier = Modifier.height(8.dp))
+            ProfileInfoRow(label = "Status", value = UserPresence.appearanceLabel(presenceAppearance))
             Spacer(modifier = Modifier.height(8.dp))
             ProfileInfoRow(
                 label = "Clubs",
