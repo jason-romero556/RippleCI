@@ -5,17 +5,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
-import com.example.rippleci.data.CsuciClassYears
-import com.example.rippleci.data.CsuciClubs
-import com.example.rippleci.data.CsuciMajors
-import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.models.FriendRequest
 import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
@@ -48,14 +43,133 @@ fun FriendsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    val csuciMajors = listOf(
+        "Anthropology",
+        "Applied Physics",
+        "Art – Art History",
+        "Art – Art Studio",
+        "Biology (B.A.)",
+        "Biology (B.S.)",
+        "Biotechnology & Bioinformatics",
+        "Business Administration",
+        "Chemistry",
+        "Communication",
+        "Computer Science",
+        "Early Childhood Studies",
+        "Economics",
+        "English",
+        "Environmental Science & Resource Management",
+        "Health Science",
+        "History",
+        "Kinesiology",
+        "Liberal Studies",
+        "Mathematics",
+        "Music",
+        "Nursing",
+        "Political Science",
+        "Psychology",
+        "Social Work",
+        "Sociology",
+        "Spanish",
+        "Theatre"
+    )
+
+    val csuciClubs = listOf(
+        "Active Minds Chapter",
+        "Alpha Delta Psi",
+        "American Marketing Association",
+        "American Medical Student Association CI",
+        "American Society for Microbiology",
+        "Anthropology Club",
+        "Beta Gamma Nu Fraternity",
+        "Bicycle Kitchen",
+        "Black Student Union (BSU)",
+        "Channel Islands Audubon",
+        "Channel Islands Endurance Club",
+        "Channel Islands Ice Hockey",
+        "Channel Islands Sociology Club",
+        "CI Bee Club",
+        "CI Biology Club",
+        "CI Business Club",
+        "CI Car Club",
+        "CI Cheer Club",
+        "CI Dance Club",
+        "CI Finance Club",
+        "CI Line Dance Club",
+        "CI Math Club",
+        "CI Neuroscience Society",
+        "CI Pre-Dental Society",
+        "CI Women in Tech",
+        "Circle K International",
+        "Conservation Robotics & Engineering Club",
+        "CSUCI Surf Club",
+        "CSUCI Surfrider Foundation",
+        "Delta Alpha Pi Honor Society",
+        "El Club de Español",
+        "English Club",
+        "Everyone is Our Priority Club",
+        "Free Radicals Chemistry Club",
+        "Gamma Beta Phi National Honor Society",
+        "Green Generation Club",
+        "Health & Wellness Club",
+        "Hillel",
+        "I.D.E.A.S.",
+        "International Relations",
+        "Intervarsity Christian Fellowship",
+        "Kappa Rho Delta Sorority",
+        "Kilusan Pilipino",
+        "LULAC",
+        "M.E.Ch.A. de CI",
+        "National Society of Collegiate Scholars",
+        "Networks and Security (NETSEC)",
+        "Physician Assistant Student Club",
+        "Pre-Law Society",
+        "Pre-Nursing Club",
+        "Psi Chi Honor Society in Psychology",
+        "Psychology Club",
+        "Queer Student Alliance",
+        "Red Cross Club",
+        "SACNAS",
+        "Sailing Club",
+        "Scuba STEM Fellowship",
+        "Sigma Omega Nu Sorority",
+        "Men's Soccer Club",
+        "Women's Soccer Club",
+        "Student Historian Association",
+        "Student Nurses' Association",
+        "Students for Quality Education",
+        "Tabletop Games Club",
+        "Tomorrows Teachers",
+        "Unión de Hermanos",
+        "Volleyball Club",
+        "Xi Sigma Sorority",
+        "Zeta Pi Omega Sorority"
+    )
+
+    val csuciClasses = listOf("Freshman", "Sophomore", "Junior", "Senior", "Graduate")
+
     var incomingRequests by remember { mutableStateOf<List<FriendRequest>>(emptyList()) }
-    var searchQuery by remember { mutableStateOf("") }
+
+    // Find Students filter state
     var selectedMajor by remember { mutableStateOf("") }
     var majorQuery by remember { mutableStateOf("") }
+
     var selectedClub by remember { mutableStateOf("") }
     var clubQuery by remember { mutableStateOf("") }
+
     var selectedClass by remember { mutableStateOf("") }
     var classExpanded by remember { mutableStateOf(false) }
+
+    val filteredMajors = remember(majorQuery) {
+        if (majorQuery.isBlank()) emptyList()
+        else csuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+    }
+
+    val filteredClubs = remember(clubQuery) {
+        if (clubQuery.isBlank()) emptyList()
+        else csuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+    }
+
     var searchResults by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var friendIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
@@ -88,122 +202,77 @@ fun FriendsScreen(
         }
 
     LaunchedEffect(currentUserId) {
-        currentUserId?.let { uid ->
-            db
-                .collection("users")
-                .document(uid)
-                .addSnapshotListener { doc, _ ->
-                    val ids =
-                        (doc?.get("friends") as? List<*>)
-                            ?.mapNotNull { it as? String } ?: emptyList()
-                    friendIds = ids
-
-                    if (ids.isNotEmpty()) {
-                        db
-                            .collection("users")
-                            .whereIn("__name__", ids)
-                            .get()
-                            .addOnSuccessListener { result ->
-                                friendProfiles =
-                                    result.documents.map { it.toUserProfile() }
-                            }
-                    } else {
-                        friendProfiles = emptyList()
-                    }
+        currentUserId.let { uid ->
+            db.collection("users").document(uid).addSnapshotListener { doc, _ ->
+                val ids = (doc?.get("friends") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                friendIds = ids
+                if (ids.isNotEmpty()) {
+                    db.collection("users").whereIn("__name__", ids).get()
+                        .addOnSuccessListener { result ->
+                            friendProfiles = result.documents.map { it.toUserProfile() }
+                        }
+                } else {
+                    friendProfiles = emptyList()
                 }
+            }
 
-            db
-                .collection("friendRequests")
+            db.collection("friendRequests")
                 .whereEqualTo("fromUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    pendingRequestIds = snapshot
-                        ?.documents
-                        ?.mapNotNull { it.getString("toUserId") } ?: emptyList()
+                    pendingRequestIds = snapshot?.documents?.mapNotNull { it.getString("toUserId") } ?: emptyList()
                 }
 
-            db
-                .collection("friendRequests")
+            db.collection("friendRequests")
                 .whereEqualTo("toUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    val requests =
-                        snapshot?.documents?.map { doc ->
-                            doc.toFriendRequest()
-                        } ?: emptyList()
-                    incomingRequests = requests
+                    incomingRequests = snapshot?.documents?.map { doc -> doc.toFriendRequest() } ?: emptyList()
                 }
 
-            db
-                .collection("userGroups")
+            db.collection("userGroups")
                 .whereArrayContains("memberIds", uid)
                 .addSnapshotListener { snapshot, _ ->
                     userGroups = snapshot?.documents?.map { it.toUserGroupProfile() } ?: emptyList()
                 }
 
-            db
-                .collection("userGroupInvites")
+            db.collection("userGroupInvites")
                 .whereEqualTo("toUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    pendingGroupInvites =
-                        snapshot?.documents?.map { it.toUserGroupInvite() } ?: emptyList()
+                    pendingGroupInvites = snapshot?.documents?.map { it.toUserGroupInvite() } ?: emptyList()
                 }
         }
     }
 
     fun acceptGroupInvite(invite: UserGroupInvite) {
         if (currentUserId.isBlank() || invite.id.isBlank()) return
-
         val inviteRef = db.collection("userGroupInvites").document(invite.id)
-
-        if (invite.groupId.isBlank()) {
-            inviteRef.update("status", "expired")
-            return
-        }
-
+        if (invite.groupId.isBlank()) { inviteRef.update("status", "expired"); return }
         val groupRef = db.collection("userGroups").document(invite.groupId)
-
         groupRef.get().addOnSuccessListener { groupDoc ->
             if (!groupDoc.exists()) {
                 inviteRef.update("status", "expired")
-                scope.launch {
-                    snackbarHostState.showSnackbar("That group no longer exists.")
-                }
+                scope.launch { snackbarHostState.showSnackbar("That group no longer exists.") }
                 return@addOnSuccessListener
             }
-
             val batch = db.batch()
             batch.update(inviteRef, "status", "accepted")
-            batch.update(
-                groupRef,
-                mapOf(
-                    "memberIds" to FieldValue.arrayUnion(currentUserId),
-                    "invitedUserIds" to FieldValue.arrayRemove(currentUserId),
-                ),
-            )
+            batch.update(groupRef, mapOf(
+                "memberIds" to FieldValue.arrayUnion(currentUserId),
+                "invitedUserIds" to FieldValue.arrayRemove(currentUserId),
+            ))
             batch.commit()
         }
     }
 
     fun declineGroupInvite(invite: UserGroupInvite) {
         if (currentUserId.isBlank() || invite.id.isBlank()) return
-
         val inviteRef = db.collection("userGroupInvites").document(invite.id)
-
-        if (invite.groupId.isBlank()) {
-            inviteRef.update("status", "declined")
-            return
-        }
-
+        if (invite.groupId.isBlank()) { inviteRef.update("status", "declined"); return }
         val groupRef = db.collection("userGroups").document(invite.groupId)
-
         groupRef.get().addOnSuccessListener { groupDoc ->
-            if (!groupDoc.exists()) {
-                inviteRef.update("status", "declined")
-                return@addOnSuccessListener
-            }
-
+            if (!groupDoc.exists()) { inviteRef.update("status", "declined"); return@addOnSuccessListener }
             val batch = db.batch()
             batch.update(inviteRef, "status", "declined")
             batch.update(groupRef, "invitedUserIds", FieldValue.arrayRemove(currentUserId))
@@ -214,27 +283,21 @@ fun FriendsScreen(
     fun createGroup() {
         val uid = currentUserId
         if (uid.isBlank() || groupName.isBlank()) return
-
-        val groupData =
-            mapOf(
-                "name" to groupName.trim(),
-                "description" to groupDescription.trim(),
-                "ownerUserId" to uid,
-                "memberIds" to listOf(uid),
-                "adminIds" to listOf(uid),
-                "visibility" to groupVisibility,
-                "createdAt" to System.currentTimeMillis(),
-            )
-
-        db
-            .collection("userGroups")
-            .add(groupData)
-            .addOnSuccessListener {
-                groupName = ""
-                groupDescription = ""
-                groupVisibility = "public"
-                showCreateGroupDialog = false
-            }
+        val groupData = mapOf(
+            "name" to groupName.trim(),
+            "description" to groupDescription.trim(),
+            "ownerUserId" to uid,
+            "memberIds" to listOf(uid),
+            "adminIds" to listOf(uid),
+            "visibility" to groupVisibility,
+            "createdAt" to System.currentTimeMillis(),
+        )
+        db.collection("userGroups").add(groupData).addOnSuccessListener {
+            groupName = ""
+            groupDescription = ""
+            groupVisibility = "public"
+            showCreateGroupDialog = false
+        }
     }
 
     fun runStudentSearch() {
@@ -306,18 +369,14 @@ fun FriendsScreen(
                         label = { Text("Group name") },
                         modifier = Modifier.fillMaxWidth(),
                     )
-
                     Spacer(modifier = Modifier.height(8.dp))
-
                     OutlinedTextField(
                         value = groupDescription,
                         onValueChange = { groupDescription = it },
                         label = { Text("Description") },
                         modifier = Modifier.fillMaxWidth(),
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     VisibilitySelector(
                         title = "Group Visibility",
                         selectedValue = groupVisibility,
@@ -327,17 +386,12 @@ fun FriendsScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = { createGroup() },
-                    enabled = groupName.isNotBlank(),
-                ) {
+                Button(onClick = { createGroup() }, enabled = groupName.isNotBlank()) {
                     Text("Create")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showCreateGroupDialog = false }) {
-                    Text("Cancel")
-                }
+                OutlinedButton(onClick = { showCreateGroupDialog = false }) { Text("Cancel") }
             },
         )
     }
@@ -348,34 +402,15 @@ fun FriendsScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
         Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
             TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    text = { Text("My Friends (${friendIds.size})") },
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text("Requests (${incomingRequests.size})") },
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    text = { Text("Groups (${userGroups.size})") },
-                )
-                Tab(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    text = { Text("Find Students") },
-                )
+                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("My Friends (${friendIds.size})") })
+                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Requests (${incomingRequests.size})") })
+                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Groups (${userGroups.size})") })
+                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Find Students") })
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -383,10 +418,7 @@ fun FriendsScreen(
             when (selectedTab) {
                 0 -> {
                     if (friendProfiles.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 "No friends yet!\nSearch for students to add.",
                                 color = MaterialTheme.colorScheme.secondary,
@@ -394,37 +426,32 @@ fun FriendsScreen(
                             )
                         }
                     } else {
-                        Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
-                        ) {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                             friendProfiles.filter { user -> user.id != currentUserId }.forEach { user ->
                                 StudentCard(
                                     user = user,
                                     isFriend = true,
                                     isPending = false,
-                                    onViewProfile = {
-                                        onOpenUserProfile(user.id)
-                                    },
+                                    onViewProfile = { onOpenUserProfile(user.id) },
                                     onAddFriend = {},
                                     onRemoveFriend = {
-                                        db
-                                            .collection("users")
-                                            .document(currentUserId)
-                                            .update(
-                                                "friends",
-                                                com.google.firebase.firestore.FieldValue
-                                                    .arrayRemove(user.id),
-                                            )
+                                        val uid = currentUserId
+                                        db.collection("users").document(uid).update("friends", FieldValue.arrayRemove(user.id))
+                                        db.collection("users").document(user.id).update("friends", FieldValue.arrayRemove(uid))
+                                        val conversationId = listOf(uid, user.id).sorted().joinToString("_")
+                                        val convRef = db.collection("conversations").document(conversationId)
+                                        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
+                                            val batch = db.batch()
+                                            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
+                                            batch.commit().addOnSuccessListener { convRef.delete() }
+                                        }
                                     },
                                     onMessage = {
                                         val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
-
                                         messagesViewModel.getOrCreateDMConversation(
                                             otherUserId = user.id,
                                             otherUserName = friendName,
-                                        ) { convId ->
-                                            onOpenConversation(convId, friendName)
-                                        }
+                                        ) { convId -> onOpenConversation(convId, friendName) }
                                     },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -435,35 +462,18 @@ fun FriendsScreen(
 
                 1 -> {
                     if (incomingRequests.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "No pending requests",
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No pending requests", color = MaterialTheme.colorScheme.secondary)
                         }
                     } else {
-                        Column(
-                            modifier = Modifier.verticalScroll(rememberScrollState()),
-                        ) {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                             incomingRequests.forEach { request ->
-                                val fromUserId = request.fromUserId
-                                val fromUserName = request.fromUserName
-
                                 Card(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                                 ) {
                                     Row(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Icon(
@@ -472,69 +482,30 @@ fun FriendsScreen(
                                             modifier = Modifier.size(48.dp),
                                             tint = MaterialTheme.colorScheme.secondary,
                                         )
-
                                         Spacer(modifier = Modifier.width(12.dp))
-
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = fromUserName,
-                                                style = MaterialTheme.typography.titleMedium,
-                                            )
+                                            Text(text = request.fromUserName, style = MaterialTheme.typography.titleMedium)
                                             Text(
                                                 text = "Wants to be your friend",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.secondary,
                                             )
                                         }
-
-                                        Button(
-                                            onClick = {
-                                                currentUserId?.let { uid ->
-                                                    val batch = db.batch()
-                                                    val requestRef =
-                                                        db
-                                                            .collection("friendRequests")
-                                                            .document(request.id)
-                                                    batch.update(requestRef, "status", "accepted")
-                                                    val currentUserRef =
-                                                        db
-                                                            .collection("users")
-                                                            .document(uid)
-                                                    val otherUserRef =
-                                                        db
-                                                            .collection("users")
-                                                            .document(fromUserId)
-                                                    batch.update(
-                                                        currentUserRef,
-                                                        "friends",
-                                                        com.google.firebase.firestore.FieldValue
-                                                            .arrayUnion(fromUserId),
-                                                    )
-                                                    batch.update(
-                                                        otherUserRef,
-                                                        "friends",
-                                                        com.google.firebase.firestore.FieldValue
-                                                            .arrayUnion(uid),
-                                                    )
-                                                    batch.commit()
-                                                }
-                                            },
-                                        ) {
-                                            Text("Accept")
-                                        }
-
+                                        Button(onClick = {
+                                            val uid = currentUserId
+                                            val batch = db.batch()
+                                            val requestRef = db.collection("friendRequests").document(request.id)
+                                            batch.update(requestRef, "status", "accepted")
+                                            val currentUserRef = db.collection("users").document(uid)
+                                            val otherUserRef = db.collection("users").document(request.fromUserId)
+                                            batch.update(currentUserRef, "friends", FieldValue.arrayUnion(request.fromUserId))
+                                            batch.update(otherUserRef, "friends", FieldValue.arrayUnion(uid))
+                                            batch.commit()
+                                        }) { Text("Accept") }
                                         Spacer(modifier = Modifier.width(8.dp))
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                db
-                                                    .collection("friendRequests")
-                                                    .document(request.id)
-                                                    .update("status", "denied")
-                                            },
-                                        ) {
-                                            Text("Deny")
-                                        }
+                                        OutlinedButton(onClick = {
+                                            db.collection("friendRequests").document(request.id).update("status", "denied")
+                                        }) { Text("Deny") }
                                     }
                                 }
                             }
@@ -543,9 +514,7 @@ fun FriendsScreen(
                 }
 
                 2 -> {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState()),
-                    ) {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         pendingGroupInvites.forEach { invite ->
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Column(modifier = Modifier.padding(16.dp)) {
@@ -553,37 +522,24 @@ fun FriendsScreen(
                                         text = invite.userGroupName.ifBlank { "Group invite" },
                                         style = MaterialTheme.typography.titleMedium,
                                     )
-
                                     Text(
                                         text = "Invited by ${invite.fromUserName.ifBlank { invite.fromUserId.ifBlank { "Unknown user" } }}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary,
                                     )
-
                                     Row {
-                                        Button(onClick = { acceptGroupInvite(invite) }) {
-                                            Text("Accept")
-                                        }
-
+                                        Button(onClick = { acceptGroupInvite(invite) }) { Text("Accept") }
                                         Spacer(modifier = Modifier.width(8.dp))
-
-                                        OutlinedButton(onClick = { declineGroupInvite(invite) }) {
-                                            Text("Decline")
-                                        }
+                                        OutlinedButton(onClick = { declineGroupInvite(invite) }) { Text("Decline") }
                                     }
                                 }
                             }
-
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        Button(
-                            onClick = { showCreateGroupDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
+                        Button(onClick = { showCreateGroupDialog = true }, modifier = Modifier.fillMaxWidth()) {
                             Text("Create Group")
                         }
-
                         Spacer(modifier = Modifier.height(12.dp))
 
                         if (userGroups.isEmpty()) {
@@ -591,26 +547,15 @@ fun FriendsScreen(
                         } else {
                             userGroups.forEach { group ->
                                 Card(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         Text(group.name, style = MaterialTheme.typography.titleMedium)
-                                        Text(
-                                            group.description.ifBlank { "No description yet." },
-                                            color = MaterialTheme.colorScheme.secondary,
-                                        )
+                                        Text(group.description.ifBlank { "No description yet." }, color = MaterialTheme.colorScheme.secondary)
                                         Text("${group.memberIds.size} members")
-
                                         Spacer(modifier = Modifier.height(8.dp))
-
-                                        OutlinedButton(
-                                            onClick = { onOpenUserGroupProfile(group.id) },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        ) {
+                                        OutlinedButton(onClick = { onOpenUserGroupProfile(group.id) }, modifier = Modifier.fillMaxWidth()) {
                                             Text("Open Group")
                                         }
                                     }
@@ -622,27 +567,12 @@ fun FriendsScreen(
 
                 3 -> {
                     Column(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
                     ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            label = { Text("Search by name or email") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            trailingIcon = {
-                                IconButton(onClick = { runStudentSearch() }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Search")
-                                }
-                            },
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
+                        // ── Major autocomplete ───────────────────────────────
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = majorQuery,
@@ -651,7 +581,7 @@ fun FriendsScreen(
                                     selectedMajor = ""
                                 },
                                 label = { Text("Major") },
-                                placeholder = { Text("Any major") },
+                                placeholder = { Text("Type to search...") },
                                 isError = majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty(),
                                 supportingText = {
                                     if (majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty()) {
@@ -681,6 +611,7 @@ fun FriendsScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        // ── Club autocomplete ────────────────────────────────
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = clubQuery,
@@ -689,7 +620,7 @@ fun FriendsScreen(
                                     selectedClub = ""
                                 },
                                 label = { Text("Club") },
-                                placeholder = { Text("Any club") },
+                                placeholder = { Text("Type to search...") },
                                 isError = clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty(),
                                 supportingText = {
                                     if (clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty()) {
@@ -719,6 +650,7 @@ fun FriendsScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        // ── Class year dropdown ──────────────────────────────
                         ExposedDropdownMenuBox(
                             expanded = classExpanded,
                             onExpandedChange = { classExpanded = !classExpanded },
@@ -728,11 +660,11 @@ fun FriendsScreen(
                                 onValueChange = {},
                                 readOnly = true,
                                 label = { Text("Class Year") },
-                                placeholder = { Text("Any year") },
+                                placeholder = { Text("Any Year") },
                                 trailingIcon = {
                                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = classExpanded)
                                 },
-                                modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                                modifier = Modifier.fillMaxWidth().menuAnchor(),
                                 singleLine = true,
                             )
                             ExposedDropdownMenu(
@@ -740,19 +672,13 @@ fun FriendsScreen(
                                 onDismissRequest = { classExpanded = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Any year") },
-                                    onClick = {
-                                        selectedClass = ""
-                                        classExpanded = false
-                                    },
+                                    text = { Text("Any Year") },
+                                    onClick = { selectedClass = ""; classExpanded = false },
                                 )
-                                CsuciClassYears.forEach { classYear ->
+                                csuciClasses.forEach { cls ->
                                     DropdownMenuItem(
-                                        text = { Text(classYear) },
-                                        onClick = {
-                                            selectedClass = classYear
-                                            classExpanded = false
-                                        },
+                                        text = { Text(cls) },
+                                        onClick = { selectedClass = cls; classExpanded = false },
                                     )
                                 }
                             }
@@ -760,8 +686,34 @@ fun FriendsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // ── Search button ────────────────────────────────────
                         Button(
-                            onClick = { runStudentSearch() },
+                            onClick = {
+                                val anyFilterSet = selectedMajor.isNotEmpty() ||
+                                        selectedClub.isNotEmpty() ||
+                                        selectedClass.isNotEmpty()
+                                if (!anyFilterSet) return@Button
+
+                                isSearching = true
+                                db.collection("users").get()
+                                    .addOnSuccessListener { result ->
+                                        searchResults = result.documents
+                                            .filter { doc ->
+                                                if (doc.id == currentUserId) return@filter false
+                                                val majorMatch = selectedMajor.isEmpty() ||
+                                                        (doc.getString("major") ?: "") == selectedMajor
+                                                val clubMatch = selectedClub.isEmpty() ||
+                                                        (doc.get("clubs") as? List<*>)
+                                                            ?.any { it.toString() == selectedClub } == true
+                                                val classMatch = selectedClass.isEmpty() ||
+                                                        (doc.getString("classYear") ?: "") == selectedClass
+                                                majorMatch && clubMatch && classMatch
+                                            }
+                                            .map { it.toUserProfile() }
+                                        isSearching = false
+                                    }
+                                    .addOnFailureListener { isSearching = false }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Search")
@@ -769,15 +721,12 @@ fun FriendsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        val hasCriteria =
-                            searchQuery.isNotBlank() ||
-                                selectedMajor.isNotBlank() ||
-                                selectedClub.isNotBlank() ||
-                                selectedClass.isNotBlank()
-
+                        // ── Results ──────────────────────────────────────────
                         if (isSearching) {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                        } else if (searchResults.isEmpty() && hasCriteria) {
+                        } else if (searchResults.isEmpty() &&
+                            (selectedMajor.isNotEmpty() || selectedClub.isNotEmpty() || selectedClass.isNotEmpty())
+                        ) {
                             Text("No students found", color = MaterialTheme.colorScheme.secondary)
                         } else {
                             searchResults.forEach { user ->
@@ -786,42 +735,38 @@ fun FriendsScreen(
                                     user = user,
                                     isFriend = friendIds.contains(user.id),
                                     isPending = pendingRequestIds.contains(user.id),
-                                    onViewProfile = {
-                                        onOpenUserProfile(user.id)
-                                    },
+                                    onViewProfile = { onOpenUserProfile(user.id) },
                                     onAddFriend = {
-                                        currentUserId?.let { uid ->
-                                            val request =
-                                                hashMapOf(
-                                                    "fromUserId" to uid,
-                                                    "fromUserName" to (auth.currentUser?.email ?: ""),
-                                                    "toUserId" to user.id,
-                                                    "status" to "pending",
-                                                    "timestamp" to System.currentTimeMillis(),
-                                                )
-                                            db.collection("friendRequests").add(request)
-                                        }
+                                        val uid = currentUserId
+                                        val request = hashMapOf(
+                                            "fromUserId" to uid,
+                                            "fromUserName" to (auth.currentUser?.displayName?.takeIf { it.isNotBlank() }
+                                                ?: user.name.takeIf { it.isNotBlank() }
+                                                ?: auth.currentUser?.email
+                                                ?: "Someone"),
+                                            "toUserId" to user.id,
+                                            "status" to "pending",
+                                            "timestamp" to System.currentTimeMillis(),
+                                        )
+                                        db.collection("friendRequests").add(request)
                                     },
                                     onRemoveFriend = {
-                                        currentUserId.let { uid ->
-                                            db
-                                                .collection("users")
-                                                .document(uid)
-                                                .update(
-                                                    "friends",
-                                                    com.google.firebase.firestore.FieldValue.arrayRemove(
-                                                        user.id,
-                                                    ),
-                                                )
+                                        val uid = currentUserId
+                                        db.collection("users").document(uid).update("friends", FieldValue.arrayRemove(user.id))
+                                        db.collection("users").document(user.id).update("friends", FieldValue.arrayRemove(uid))
+                                        val conversationId = listOf(uid, user.id).sorted().joinToString("_")
+                                        val convRef = db.collection("conversations").document(conversationId)
+                                        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
+                                            val batch = db.batch()
+                                            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
+                                            batch.commit().addOnSuccessListener { convRef.delete() }
                                         }
                                     },
                                     onMessage = {
                                         messagesViewModel.getOrCreateDMConversation(
                                             otherUserId = user.id,
                                             otherUserName = friendName,
-                                        ) { convId ->
-                                            onOpenConversation(convId, friendName)
-                                        }
+                                        ) { convId -> onOpenConversation(convId, friendName) }
                                     },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
