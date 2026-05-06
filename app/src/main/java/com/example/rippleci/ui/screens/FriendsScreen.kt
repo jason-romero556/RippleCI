@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendsScreen(
+    requestedSelectedTab: Int? = null,
+    onSelectedTabRequestHandled: () -> Unit = {},
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
     onOpenUserProfile: (String) -> Unit = {},
     onOpenUserGroupProfile: (String) -> Unit = {},
@@ -71,6 +73,13 @@ fun FriendsScreen(
     var groupName by remember { mutableStateOf("") }
     var groupDescription by remember { mutableStateOf("") }
     var groupVisibility by remember { mutableStateOf("public") }
+
+    LaunchedEffect(requestedSelectedTab) {
+        requestedSelectedTab?.let { tabIndex ->
+            selectedTab = tabIndex
+            onSelectedTabRequestHandled()
+        }
+    }
 
     val filteredMajors = remember(majorQuery) {
         if (majorQuery.isBlank()) emptyList()

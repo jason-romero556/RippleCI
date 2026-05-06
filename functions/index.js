@@ -2,6 +2,13 @@ const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  return 0;
+}
+
 exports.sendFriendRequestNotification = onDocumentCreated(
   "friendRequests/{requestId}",
   async (event) => {
@@ -93,6 +100,7 @@ exports.sendMessageNotification = onDocumentCreated(
         : [];
 
       const recipients = participants.filter((uid) => uid !== senderId);
+      const activeConversationFreshAfterMs = 2 * 60 * 1000;
 
       const notifications = recipients.map(async (recipientId) => {
         const recipientDoc = await admin.firestore()
@@ -108,8 +116,20 @@ exports.sendMessageNotification = onDocumentCreated(
 
         // Skip if recipient already has this conversation open
         const activeConversationId = recipientData.activeConversationId || null;
-        if (activeConversationId === convId) {
-          console.log("Skipping notification for " + recipientId + " — already in conversation");
+        const activeConversationUpdatedAt = toMillis(
+          recipientData.activeConversationUpdatedAt,
+        );
+        const isViewingConversation =
+          activeConversationId === convId &&
+          activeConversationUpdatedAt > 0 &&
+          Date.now() - activeConversationUpdatedAt <=
+            activeConversationFreshAfterMs;
+
+        if (isViewingConversation) {
+          console.log(
+            "Skipping notification for " + recipientId +
+              " - already in conversation",
+          );
           return;
         }
 
@@ -134,6 +154,7 @@ exports.sendMessageNotification = onDocumentCreated(
             },
           },
         });
+      });
 
       await Promise.all(notifications);
       console.log("Notifications sent for conversation " + convId);
