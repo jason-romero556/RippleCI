@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -16,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.rippleci.data.eventSortMillis
+import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.toEventInvite
@@ -42,35 +45,45 @@ fun EventsScreen(
 
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isPersonalExpanded by remember { mutableStateOf(true) }
+    var isPastPersonalExpanded by remember { mutableStateOf(false) }
     var isSchoolExpanded by remember { mutableStateOf(true) }
     var isCreatingEvent by remember { mutableStateOf(false) }
     var pendingInvites by remember { mutableStateOf<List<EventInvite>>(emptyList()) }
     var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isInvitesExpanded by remember { mutableStateOf(true) }
     var isAttendingExpanded by remember { mutableStateOf(true) }
+    var isPastAttendingExpanded by remember { mutableStateOf(false) }
+
+    DisposableEffect(userId) {
+        val uid = userId
+        if (uid.isNullOrBlank()) {
+            personalEvents = emptyList()
+            onDispose { }
+        } else {
+            val registration =
+                db
+                    .collection("users")
+                    .document(uid)
+                    .collection("personalEvents")
+                    .addSnapshotListener { snapshot, _ ->
+                        personalEvents =
+                            snapshot
+                                ?.documents
+                                ?.map { doc ->
+                                    doc.toPersonalEvent().copy(
+                                        id = doc.id,
+                                        ownerUserId = doc.getString("ownerUserId").orEmpty().ifBlank { uid },
+                                    )
+                                }
+                                ?: emptyList()
+                    }
+
+            onDispose { registration.remove() }
+        }
+    }
 
     LaunchedEffect(userId) {
         userId?.let { uid ->
-            db
-                .collection("users")
-                .document(uid)
-                .collection("personalEvents")
-                .get()
-                .addOnSuccessListener { result ->
-                    personalEvents =
-                        result.documents.map { doc ->
-                            PersonalEvent(
-                                id = doc.id,
-                                title = doc.getString("title").orEmpty(),
-                                description = doc.getString("description").orEmpty(),
-                                location = doc.getString("location").orEmpty(),
-                                date = doc.getString("date").orEmpty(),
-                                startTime = doc.getString("startTime").orEmpty(),
-                                endTime = doc.getString("endTime").orEmpty(),
-                            )
-                        }
-                }
-
             db
                 .collection("eventInvites")
                 .whereEqualTo("toUserId", uid)
@@ -160,6 +173,8 @@ fun EventsScreen(
                             "date" to newEvent.date,
                             "startTime" to newEvent.startTime,
                             "endTime" to newEvent.endTime,
+                            "startAtMillis" to newEvent.startAtMillis,
+                            "endAtMillis" to newEvent.endAtMillis,
                             "ownerUserId" to uid,
                             "attendeeIds" to listOf(uid),
                             "invitedUserIds" to emptyList<String>(),
@@ -171,8 +186,7 @@ fun EventsScreen(
                         .document(uid)
                         .collection("personalEvents")
                         .add(eventData)
-                        .addOnSuccessListener { docRef ->
-                            personalEvents = personalEvents + newEvent.copy(id = docRef.id)
+                        .addOnSuccessListener {
                             isCreatingEvent = false
                         }
                 }
@@ -183,6 +197,23 @@ fun EventsScreen(
         )
     } else {
         val uiState by viewModel.uiState.collectAsState()
+        val nowMillis = System.currentTimeMillis()
+        val upcomingPersonalEvents =
+            personalEvents
+                .filterNot { it.isPastEvent(nowMillis) }
+                .sortedBy { it.eventSortMillis() }
+        val pastPersonalEvents =
+            personalEvents
+                .filter { it.isPastEvent(nowMillis) }
+                .sortedByDescending { it.eventSortMillis() }
+        val upcomingAttendingEvents =
+            attendingEvents
+                .filterNot { it.isPastEvent(nowMillis) }
+                .sortedBy { it.eventSortMillis() }
+        val pastAttendingEvents =
+            attendingEvents
+                .filter { it.isPastEvent(nowMillis) }
+                .sortedByDescending { it.eventSortMillis() }
 
         Column(modifier = modifier.fillMaxSize()) {
             Text(
@@ -231,7 +262,7 @@ fun EventsScreen(
             }
 
             CollapsibleSection(
-                title = "My Events",
+                title = "My Events (${upcomingPersonalEvents.size})",
                 expanded = isPersonalExpanded,
                 onToggle = { isPersonalExpanded = !isPersonalExpanded },
             ) {
@@ -244,10 +275,10 @@ fun EventsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (personalEvents.isEmpty()) {
-                    Text("No personal events yet.")
+                if (upcomingPersonalEvents.isEmpty()) {
+                    Text("No upcoming personal events.")
                 } else {
-                    personalEvents.forEach { event ->
+                    upcomingPersonalEvents.forEach { event ->
                         PersonalEventCard(
                             event = event,
                             onClick = { onOpenEventProfile(userId.orEmpty(), event.id) },
@@ -258,14 +289,51 @@ fun EventsScreen(
             }
 
             CollapsibleSection(
-                title = "Events I'm Attending",
+                title = "Past My Events (${pastPersonalEvents.size})",
+                expanded = isPastPersonalExpanded,
+                onToggle = { isPastPersonalExpanded = !isPastPersonalExpanded },
+            ) {
+                if (pastPersonalEvents.isEmpty()) {
+                    Text("No past personal events.")
+                } else {
+                    pastPersonalEvents.forEach { event ->
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(userId.orEmpty(), event.id) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            CollapsibleSection(
+                title = "Events I'm Attending (${upcomingAttendingEvents.size})",
                 expanded = isAttendingExpanded,
                 onToggle = { isAttendingExpanded = !isAttendingExpanded },
             ) {
-                if (attendingEvents.isEmpty()) {
-                    Text("No accepted event invites yet.")
+                if (upcomingAttendingEvents.isEmpty()) {
+                    Text("No upcoming accepted event invites.")
                 } else {
-                    attendingEvents.forEach { event ->
+                    upcomingAttendingEvents.forEach { event ->
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(event.ownerUserId, event.id) },
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            CollapsibleSection(
+                title = "Past Events I Attended (${pastAttendingEvents.size})",
+                expanded = isPastAttendingExpanded,
+                onToggle = { isPastAttendingExpanded = !isPastAttendingExpanded },
+            ) {
+                if (pastAttendingEvents.isEmpty()) {
+                    Text("No past attended events.")
+                } else {
+                    pastAttendingEvents.forEach { event ->
                         PersonalEventCard(
                             event = event,
                             onClick = { onOpenEventProfile(event.ownerUserId, event.id) },

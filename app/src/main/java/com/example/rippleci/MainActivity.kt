@@ -3,6 +3,7 @@ package com.example.rippleci
 import android.os.Build
 import android.os.Bundle
 import android.Manifest
+import android.content.Intent
 import androidx.core.app.ActivityCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.rippleci.data.UserPresence
 import com.example.rippleci.ui.auth.LoginScreen
 import com.example.rippleci.ui.main.MainApp
+import com.example.rippleci.ui.notifications.NotificationNavigationTarget
 import com.example.rippleci.ui.theme.RippleCITheme
 import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
@@ -28,9 +30,11 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private var presenceHeartbeatJob: Job? = null
+    private var notificationNavigationTarget by mutableStateOf<NotificationNavigationTarget?>(null)
     private val themeViewModel: ThemeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        notificationNavigationTarget = intent.toNotificationNavigationTarget()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ActivityCompat.requestPermissions(
@@ -42,39 +46,48 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val isDarkTheme = themeViewModel.isDarkTheme ?: isSystemInDarkTheme()
-            RippleCITheme(
-                appTheme = themeViewModel.appTheme,
-                darkTheme = isDarkTheme
-            ) {
+            val appTheme by remember { derivedStateOf { themeViewModel.appTheme } }
+            val darkTheme = themeViewModel.isDarkTheme ?: isSystemInDarkTheme()
+
+            RippleCITheme(appTheme = appTheme, darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
-                    val auth = Firebase.auth
-                    var currentUserId by remember { mutableStateOf(auth.currentUser?.uid) }
+                val auth = Firebase.auth
+                var currentUserId by remember { mutableStateOf(auth.currentUser?.uid) }
 
-                    if (currentUserId != null) {
-                        key(currentUserId) {
-                            MainApp(
-                                themeViewModel = themeViewModel,
-                                onSignOut = {
-                                    currentUserId?.let { userId ->
-                                        UserPresence.update(userId, UserPresence.CLOSED)
-                                    }
-                                    auth.signOut()
-                                    currentUserId = null
+                if (currentUserId != null) {
+                    key(currentUserId) {
+                        MainApp(
+                            themeViewModel = themeViewModel,
+                            notificationNavigationTarget = notificationNavigationTarget,
+                            onNotificationNavigationHandled = {
+                                notificationNavigationTarget = null
+                            },
+                            onSignOut = {
+                                currentUserId?.let { userId ->
+                                    UserPresence.update(userId, UserPresence.OFFLINE)
                                 }
-                            )
-                        }
-                    } else {
-                        LoginScreen(onLoginSuccess = {
+                                auth.signOut()
+                                currentUserId = null
+                            },
+                        )
+                    }
+                } else {
+                    LoginScreen(onLoginSuccess = {
                             currentUserId = auth.currentUser?.uid
                         })
-                    }
+                }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationNavigationTarget = intent.toNotificationNavigationTarget()
     }
 
     override fun onStart() {
@@ -84,7 +97,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        updatePresence(UserPresence.MINIMIZED)
+        updatePresence(UserPresence.IDLE)
         stopPresenceHeartbeat()
         super.onStop()
     }
@@ -111,5 +124,17 @@ class MainActivity : ComponentActivity() {
         Firebase.auth.currentUser?.uid?.let { userId ->
             UserPresence.update(userId, status)
         }
+    }
+
+    private fun Intent.toNotificationNavigationTarget(): NotificationNavigationTarget? {
+        val navigateTo = getStringExtra("navigate_to") ?: return null
+
+        return NotificationNavigationTarget(
+            navigateTo = navigateTo,
+            conversationId = getStringExtra("conversationId").orEmpty(),
+            title = getStringExtra("title").orEmpty(),
+            requestId = getStringExtra("requestId").orEmpty(),
+            senderId = getStringExtra("senderId").orEmpty(),
+        )
     }
 }

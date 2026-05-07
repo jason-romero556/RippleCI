@@ -11,21 +11,30 @@ import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.google.firebase.firestore.DocumentSnapshot
 
-fun DocumentSnapshot.toUserProfile(): UserProfile =
-    UserProfile(
+fun DocumentSnapshot.toUserProfile(): UserProfile {
+    val classYear = getString("classYear").orEmpty()
+    val classes =
+        (get("classes") as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?.ifEmpty { null }
+            ?: listOf(classYear).filter { it.isNotBlank() }
+
+    return UserProfile(
         id = id,
         name = getString("name").orEmpty(),
         bio = getString("bio").orEmpty(),
         email = getString("email").orEmpty(),
         major = getString("major").orEmpty(),
         clubIds = (get("clubs") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-        classes = (get("classes") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        classes = classes,
         friendIds = (get("friends") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
+        presenceMode = getString("presenceMode").orEmpty().ifBlank { "automatic" },
         presenceStatus = getString("presenceStatus").orEmpty().ifBlank { "closed" },
         presenceUpdatedAt = getLong("presenceUpdatedAt") ?: 0L,
         visibility = getString("visibility") ?: "public",
     )
+}
 
 fun DocumentSnapshot.toFriendRequest(): FriendRequest =
     FriendRequest(
@@ -46,6 +55,8 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
         date = getString("date").orEmpty(),
         startTime = getString("startTime").orEmpty(),
         endTime = getString("endTime").orEmpty(),
+        startAtMillis = getLong("startAtMillis") ?: 0L,
+        endAtMillis = getLong("endAtMillis") ?: 0L,
         ownerUserId = getString("ownerUserId").orEmpty(),
         visibility = getString("visibility") ?: "public",
         groupId = getString("groupId").orEmpty(),

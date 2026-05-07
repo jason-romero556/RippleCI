@@ -14,7 +14,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,6 +34,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rippleci.data.canViewEvent
+import com.example.rippleci.data.canViewProfile
+import com.example.rippleci.data.eventSortMillis
+import com.example.rippleci.data.firstNameFromCandidates
+import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
@@ -63,6 +71,9 @@ fun UserProfileScreen(
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isFriend by remember { mutableStateOf(false) }
     var isPending by remember { mutableStateOf(false) }
+    var profileLoaded by remember { mutableStateOf(false) }
+    var currentUserFriendIds by remember { mutableStateOf<List<String>?>(null) }
+    var currentUserName by remember { mutableStateOf("") }
     var isFriendListExpanded by remember { mutableStateOf(true) }
     var isClubListExpanded by remember { mutableStateOf(true) }
     var isEventListExpanded by remember { mutableStateOf(true) }
@@ -75,6 +86,7 @@ fun UserProfileScreen(
             .get()
             .addOnSuccessListener { doc ->
                 userProfile = doc.toUserProfile()
+                profileLoaded = true
 
                 if (userProfile.friendIds.isNotEmpty()) {
                     db
@@ -92,23 +104,33 @@ fun UserProfileScreen(
                     .collection("personalEvents")
                     .get()
                     .addOnSuccessListener { result ->
-                        personalEvents = result.documents.map { it.toPersonalEvent() }
+                        personalEvents =
+                            result.documents.map { it.toPersonalEvent().copy(ownerUserId = userId) }
                     }
             }
     }
 
     LaunchedEffect(currentUserId, userId) {
-        if (currentUserId.isBlank() || currentUserId == userId) return@LaunchedEffect
+        if (currentUserId.isBlank()) {
+            currentUserFriendIds = emptyList()
+            return@LaunchedEffect
+        }
+
+        if (currentUserId == userId) {
+            currentUserFriendIds = emptyList()
+            return@LaunchedEffect
+        }
 
         db
             .collection("users")
             .document(currentUserId)
             .addSnapshotListener { doc, _ ->
+                currentUserName = doc?.getString("name").orEmpty()
                 val friendIds =
                     (doc?.get("friends") as? List<*>)
                         ?.mapNotNull { it as? String }
                         ?: emptyList()
-
+                currentUserFriendIds = friendIds
                 isFriend = friendIds.contains(userId)
             }
 
@@ -128,7 +150,10 @@ fun UserProfileScreen(
         val request =
             hashMapOf(
                 "fromUserId" to currentUserId,
-                "fromUserName" to (auth.currentUser?.email ?: ""),
+                "fromUserName" to firstNameFromCandidates(
+                    currentUserName,
+                    auth.currentUser?.displayName,
+                ),
                 "toUserId" to userId,
                 "status" to "pending",
                 "timestamp" to System.currentTimeMillis(),
@@ -138,6 +163,8 @@ fun UserProfileScreen(
     }
 
     fun removeFriend() {
+        if (currentUserId.isBlank() || currentUserId == userId) return
+
         val batch = db.batch()
 
         batch.update(
@@ -153,6 +180,45 @@ fun UserProfileScreen(
         )
 
         batch.commit()
+    }
+
+    if (!profileLoaded || currentUserFriendIds == null) {
+        CircularProgressIndicator()
+        return
+    }
+
+    if (!canViewProfile(userProfile, currentUserId, currentUserFriendIds.orEmpty())) {
+        Text("This profile is private.")
+        return
+    }
+
+    if (showRemoveDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveDialog = false },
+            title = { Text("Remove Friend") },
+            text = {
+                Text("Are you sure you want to remove ${userProfile.name.ifBlank { "this user" }} as a friend?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        removeFriend()
+                        showRemoveDialog = false
+                    },
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showRemoveDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 
     Column(
@@ -279,17 +345,49 @@ fun UserProfileScreen(
             expanded = isEventListExpanded,
             onToggle = { isEventListExpanded = !isEventListExpanded },
         ) {
+            val visibleEvents =
+                personalEvents.filter { event ->
+                    canViewEvent(event, currentUserId, currentUserFriendIds.orEmpty())
+                }
+            val nowMillis = System.currentTimeMillis()
+            val upcomingEvents =
+                visibleEvents
+                    .filterNot { it.isPastEvent(nowMillis) }
+                    .sortedBy { it.eventSortMillis() }
+            val pastEvents =
+                visibleEvents
+                    .filter { it.isPastEvent(nowMillis) }
+                    .sortedByDescending { it.eventSortMillis() }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (personalEvents.isEmpty()) {
-                Text("No personal events yet.")
+            if (visibleEvents.isEmpty()) {
+                Text("No visible personal events.")
             } else {
-                personalEvents.forEach { event ->
-                    PersonalEventCard(
-                        event = event,
-                        onClick = { onOpenEventProfile(event.id) },
-                    )
+                if (upcomingEvents.isNotEmpty()) {
+                    Text("Upcoming Events", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    upcomingEvents.forEach { event ->
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(event.id) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                if (pastEvents.isNotEmpty()) {
+                    Text("Past Events", style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    pastEvents.forEach { event ->
+                        PersonalEventCard(
+                            event = event,
+                            onClick = { onOpenEventProfile(event.id) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
         }
