@@ -89,36 +89,60 @@ private val EcoDarkColorScheme =
 private val lightSkyScheme =
     lightColorScheme(
         primary = CSUCI_Sky,
+        onPrimary = Color(0xFF003543), // Deep blue for high contrast on light blue
         secondary = CSUCI_Sand,
+        onSecondary = Color.Black,
+        surface = Color.White,
+        onSurface = Color.Black,
     )
+
 private val darkSkyScheme =
     darkColorScheme(
         primary = CSUCI_Sky,
+        onPrimary = Color.Black, // Sky is light, so text on it must be dark
         secondary = CSUCI_Sand,
+        onSecondary = Color.Black,
+        background = Color(0xFF001F28), // Very dark blue/black
+        surface = Color(0xFF001F28),
+        onSurface = Color.White,
     )
 
 private val lightSunsetScheme =
     lightColorScheme(
         primary = CSUCI_Horizon,
+        onPrimary = Color.White,
         secondary = CSUCI_Desert,
+        onSecondary = Color.Black,
     )
+
 private val darkSunsetScheme =
     darkColorScheme(
         primary = CSUCI_Horizon,
+        onPrimary = Color.Black,
         secondary = CSUCI_Desert,
+        onSecondary = Color.Black,
+        background = Color(0xFF2E1500), // Dark brown/black
+        surface = Color(0xFF2E1500),
+        onSurface = Color.White,
     )
 
 private val lightOceanScheme =
     lightColorScheme(
         primary = CSUCI_Teal,
+        onPrimary = Color.White,
         secondary = CSUCI_IslandBlue,
+        onSecondary = Color.White,
     )
 
 private val darkOceanScheme =
     darkColorScheme(
         primary = CSUCI_Teal,
+        onPrimary = Color.Black,
         secondary = CSUCI_IslandBlue,
-        background = Color((0xFF1B2414)),
+        onSecondary = Color.White,
+        background = Color(0xFF001B20),
+        surface = Color(0xFF001B20),
+        onSurface = Color.White,
     )
 private val DarkColorScheme =
     darkColorScheme(
@@ -185,9 +209,11 @@ fun RippleCITheme(
             }
         }
 
+    val typography = getTypography(darkTheme)
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = typography,
         content = content,
     )
 }

@@ -99,35 +99,6 @@ fun MainApp(
         onNotificationNavigationHandled()
     }
 
-    LaunchedEffect(notificationNavigationTarget) {
-        val target = notificationNavigationTarget ?: return@LaunchedEffect
-
-        when (target.navigateTo) {
-            "friends" -> {
-                routeStack = emptyList()
-                currentDestination = AppDestinations.FRIENDS
-                requestedFriendsTab = 1
-            }
-
-            "messages" -> {
-                currentDestination = AppDestinations.MESSAGES
-                if (target.conversationId.isBlank()) {
-                    routeStack = emptyList()
-                } else {
-                    routeStack =
-                        listOf(
-                            AppRoute.Conversation(
-                                conversationId = target.conversationId,
-                                title = target.title.ifBlank { "Conversation" },
-                            ),
-                        )
-                }
-            }
-        }
-
-        onNotificationNavigationHandled()
-    }
-
     val usesAppPalette = themeViewModel.appTheme != AppTheme.DYNAMIC
     val topBarContentColor =
         if (usesAppPalette) {
@@ -207,7 +178,7 @@ fun MainApp(
                         tint = topBarContentColor,
                     )
                     Text(
-                        text = currentDestination.label,
+                        text = if (route is AppRoute.Events) "Events" else currentDestination.label,
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.align(Alignment.Center),
                         color = topBarContentColor,
@@ -236,10 +207,10 @@ fun MainApp(
                         when (currentDestination) {
                             AppDestinations.HOME -> {
                                 HomeScreen(
-                                    themeViewModel = themeViewModel,
                                     onOpenEventProfile = { ownerUserId, eventId ->
                                         navigateTo(AppRoute.EventProfile(eventId, ownerUserId))
                                     },
+                                    onAddEvent = { navigateTo(AppRoute.Events) },
                                 )
                             }
 
@@ -285,23 +256,26 @@ fun MainApp(
                             }
 
                             AppDestinations.PROFILE -> {
-                                ProfileScreen(onSignOut = onSignOut)
-                            }
-
-                            AppDestinations.EVENTS -> {
-                                EventsScreen(
-                                    onOpenEventProfile = { ownerUserId, eventId ->
-                                        navigateTo(
-                                            AppRoute.EventProfile(
-                                                eventId,
-                                                ownerUserId,
-                                            ),
-                                        )
-                                    },
+                                ProfileScreen(
+                                    themeViewModel = themeViewModel,
+                                    onSignOut = onSignOut,
                                 )
                             }
                         }
                     }
+                }
+
+                is AppRoute.Events -> {
+                    EventsScreen(
+                        onOpenEventProfile = { ownerUserId, eventId ->
+                            navigateTo(
+                                AppRoute.EventProfile(
+                                    eventId,
+                                    ownerUserId,
+                                ),
+                            )
+                        },
+                    )
                 }
 
                 is AppRoute.Conversation -> {
