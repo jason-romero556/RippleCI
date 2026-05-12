@@ -48,10 +48,16 @@ fun MessagesScreen(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(conversations) { convo ->
+                    val displayName = if (convo.isGroup) {
+                        convo.groupName
+                    } else {
+                        val otherUserId = convo.members.firstOrNull { it != viewModel.currentUserId }
+                        convo.memberNames[otherUserId] ?: "Unknown"
+                    }
                     ConversationItem(
                         conversation = convo,
                         currentUserId = viewModel.currentUserId,
-                        onClick = { onOpenConversation(convo.conversationId, convo.groupName) },
+                        onClick = { onOpenConversation(convo.conversationId, displayName) },
                     )
                 }
             }

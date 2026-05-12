@@ -148,44 +148,11 @@ fun ConversationScreen(
             }
         },
     ) { padding ->
-        var showConfirmDialog by remember { mutableStateOf(false) }
-
-        if (showConfirmDialog) {
-            AlertDialog(
-                onDismissRequest = { showConfirmDialog = false },
-                title = { Text("Clear Chat History") },
-                text = { Text("This will delete all messages for you. Are you sure?") },
-                confirmButton = {
-                    Button(onClick = {
-                        viewModel.clearChatHistory(conversationId) {
-                            showConfirmDialog = false
-                        }
-                    }) { Text("Clear") }
-                },
-                dismissButton = {
-                    OutlinedButton(onClick = { showConfirmDialog = false }) {
-                        Text("Cancel")
-                    }
-                },
-            )
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(onClick = { showConfirmDialog = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Clear Chat")
-                }
-            }
-
             LazyColumn(
                 state = listState,
                 modifier = Modifier
