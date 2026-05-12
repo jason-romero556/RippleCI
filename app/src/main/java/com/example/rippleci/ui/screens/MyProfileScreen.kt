@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,13 +33,16 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,14 +53,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import com.example.rippleci.data.CsuciClassYears
 import com.example.rippleci.data.CsuciClubs
 import com.example.rippleci.data.CsuciMajors
+import com.example.rippleci.data.UserPresence
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
+import com.example.rippleci.ui.theme.AppTheme
+import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.SetOptions
@@ -65,116 +73,14 @@ import com.google.firebase.storage.storage
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun ProfileScreen(onSignOut: () -> Unit) {
+fun ProfileScreen(
+    themeViewModel: ThemeViewModel,
+    onSignOut: () -> Unit,
+) {
     val auth = Firebase.auth
     val db = Firebase.firestore
     val storage = Firebase.storage
     val userId = auth.currentUser?.uid
-
-    val csuciMajors = listOf(
-        "Anthropology",
-        "Applied Physics",
-        "Art – Art History",
-        "Art – Art Studio",
-        "Biology (B.A.)",
-        "Biology (B.S.)",
-        "Biotechnology & Bioinformatics",
-        "Business Administration",
-        "Chemistry",
-        "Communication",
-        "Computer Science",
-        "Early Childhood Studies",
-        "Economics",
-        "English",
-        "Environmental Science & Resource Management",
-        "Health Science",
-        "History",
-        "Kinesiology",
-        "Liberal Studies",
-        "Mathematics",
-        "Music",
-        "Nursing",
-        "Political Science",
-        "Psychology",
-        "Social Work",
-        "Sociology",
-        "Spanish",
-        "Theatre"
-    )
-
-    val csuciClubs = listOf(
-        "Active Minds Chapter",
-        "Alpha Delta Psi",
-        "American Marketing Association",
-        "American Medical Student Association CI",
-        "American Society for Microbiology",
-        "Anthropology Club",
-        "Beta Gamma Nu Fraternity",
-        "Bicycle Kitchen",
-        "Black Student Union (BSU)",
-        "Channel Islands Audubon",
-        "Channel Islands Endurance Club",
-        "Channel Islands Ice Hockey",
-        "Channel Islands Sociology Club",
-        "CI Bee Club",
-        "CI Biology Club",
-        "CI Business Club",
-        "CI Car Club",
-        "CI Cheer Club",
-        "CI Dance Club",
-        "CI Finance Club",
-        "CI Line Dance Club",
-        "CI Math Club",
-        "CI Neuroscience Society",
-        "CI Pre-Dental Society",
-        "CI Women in Tech",
-        "Circle K International",
-        "Conservation Robotics & Engineering Club",
-        "CSUCI Surf Club",
-        "CSUCI Surfrider Foundation",
-        "Delta Alpha Pi Honor Society",
-        "El Club de Español",
-        "English Club",
-        "Everyone is Our Priority Club",
-        "Free Radicals Chemistry Club",
-        "Gamma Beta Phi National Honor Society",
-        "Green Generation Club",
-        "Health & Wellness Club",
-        "Hillel",
-        "I.D.E.A.S.",
-        "International Relations",
-        "Intervarsity Christian Fellowship",
-        "Kappa Rho Delta Sorority",
-        "Kilusan Pilipino",
-        "LULAC",
-        "M.E.Ch.A. de CI",
-        "National Society of Collegiate Scholars",
-        "Networks and Security (NETSEC)",
-        "Physician Assistant Student Club",
-        "Pre-Law Society",
-        "Pre-Nursing Club",
-        "Psi Chi Honor Society in Psychology",
-        "Psychology Club",
-        "Queer Student Alliance",
-        "Red Cross Club",
-        "SACNAS",
-        "Sailing Club",
-        "Scuba STEM Fellowship",
-        "Sigma Omega Nu Sorority",
-        "Men's Soccer Club",
-        "Women's Soccer Club",
-        "Student Historian Association",
-        "Student Nurses' Association",
-        "Students for Quality Education",
-        "Tabletop Games Club",
-        "Tomorrows Teachers",
-        "Unión de Hermanos",
-        "Volleyball Club",
-        "Xi Sigma Sorority",
-        "Zeta Pi Omega Sorority"
-    )
-
-    val csuciClasses = listOf("Freshman", "Sophomore", "Junior", "Senior", "Graduate")
 
     var name by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
@@ -188,7 +94,17 @@ fun ProfileScreen(onSignOut: () -> Unit) {
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf("public") }
+    var presenceMode by remember { mutableStateOf(UserPresence.AUTOMATIC) }
     var classExpanded by remember { mutableStateOf(false) }
+    var presenceExpanded by remember { mutableStateOf(false) }
+
+    val presenceModeOptions =
+        listOf(
+            UserPresence.AUTOMATIC to "Automatic",
+            UserPresence.ONLINE to "Online",
+            UserPresence.IDLE to "Idle",
+            UserPresence.OFFLINE to "Offline",
+        )
 
     val filteredMajors = remember(majorQuery) {
         if (majorQuery.isBlank()) {
@@ -206,64 +122,62 @@ fun ProfileScreen(onSignOut: () -> Unit) {
         }
     }
 
-    var classExpanded by remember { mutableStateOf(false) }
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let {
+                isUploading = true
+                val storageRef = storage.reference.child("profile_pictures/$userId.jpg")
 
-    val filteredMajors = remember(majorQuery) {
-        if (majorQuery.isBlank()) emptyList()
-        else csuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
-    }
-
-    val filteredClubs = remember(clubQuery) {
-        if (clubQuery.isBlank()) emptyList()
-        else csuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
-    }
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri: Uri? ->
-        uri?.let {
-            isUploading = true
-            val storageRef = storage.reference.child("profile_pictures/$userId.jpg")
-            storageRef.putFile(it)
-                .addOnSuccessListener {
-                    storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
-                        profilePictureUrl = downloadUrl.toString()
-                        userId?.let { uid ->
-                            db.collection("users").document(uid)
-                                .update("profilePictureUrl", profilePictureUrl)
+                storageRef
+                    .putFile(it)
+                    .addOnSuccessListener {
+                        storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                            profilePictureUrl = downloadUrl.toString()
+                            userId?.let { uid ->
+                                db.collection("users").document(uid).update("profilePictureUrl", profilePictureUrl)
+                            }
+                            isUploading = false
+                            statusMessage = "Profile picture updated!"
                         }
+                    }.addOnFailureListener { e ->
                         isUploading = false
-                        statusMessage = "Profile picture updated!"
+                        statusMessage = "Upload failed: ${e.message}"
                     }
-                }.addOnFailureListener { e ->
-                    isUploading = false
-                    statusMessage = "Upload failed: ${e.message}"
-                }
+            }
         }
-    }
 
     LaunchedEffect(userId) {
-        userId?.let {
-            db.collection("users").document(it).get()
+        userId?.let { uid ->
+            db.collection("users").document(uid).get()
                 .addOnSuccessListener { doc ->
                     name = doc.getString("name") ?: ""
                     bio = doc.getString("bio") ?: ""
                     major = doc.getString("major") ?: ""
                     majorQuery = major
-                    selectedClubs = (doc.get("clubs") as? List<*>)
-                        ?.mapNotNull { it as? String }?.toSet() ?: emptySet()
-                    classYear = doc.getString("classYear") ?: ""
+                    selectedClubs =
+                        (doc.get("clubs") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            ?.toSet()
+                            ?: emptySet()
+                    classYear =
+                        doc.getString("classYear")
+                            ?: (doc.get("classes") as? List<*>)?.firstOrNull() as? String
+                            ?: ""
                     profilePictureUrl = doc.getString("profilePictureUrl") ?: ""
                     visibility = doc.getString("visibility") ?: "public"
+                    presenceMode = doc.getString("presenceMode") ?: UserPresence.AUTOMATIC
                 }
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(32.dp)
+                .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.height(32.dp))
@@ -272,24 +186,25 @@ fun ProfileScreen(onSignOut: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ── Profile picture ──────────────────────────────────────────────
         Box(contentAlignment = Alignment.BottomEnd) {
             if (profilePictureUrl.isNotEmpty()) {
                 AsyncImage(
                     model = profilePictureUrl,
                     contentDescription = "Profile Picture",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .clickable { imagePickerLauncher.launch("image/*") },
+                    modifier =
+                        Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .clickable { imagePickerLauncher.launch("image/*") },
                 )
             } else {
                 Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .clickable { imagePickerLauncher.launch("image/*") },
+                    modifier =
+                        Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .clickable { imagePickerLauncher.launch("image/*") },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -300,10 +215,14 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                     )
                 }
             }
+
             Icon(
                 Icons.Default.Edit,
                 contentDescription = "Edit Photo",
-                modifier = Modifier.size(24.dp).clip(CircleShape),
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape),
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
@@ -324,8 +243,6 @@ fun ProfileScreen(onSignOut: () -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
 
         if (isEditing) {
-
-            // ── Name ─────────────────────────────────────────────────────
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -335,7 +252,6 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Bio ──────────────────────────────────────────────────────
             OutlinedTextField(
                 value = bio,
                 onValueChange = { bio = it },
@@ -345,7 +261,6 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Major autocomplete ───────────────────────────────────────
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = majorQuery,
@@ -370,12 +285,12 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                     properties = PopupProperties(focusable = false),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    filteredMajors.forEach { m ->
+                    filteredMajors.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(m) },
+                            text = { Text(option) },
                             onClick = {
-                                major = m
-                                majorQuery = m
+                                major = option
+                                majorQuery = option
                             },
                         )
                     }
@@ -383,7 +298,6 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Class year dropdown ──────────────────────────────────────
             ExposedDropdownMenuBox(
                 expanded = classExpanded,
                 onExpandedChange = { classExpanded = !classExpanded },
@@ -397,7 +311,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                     trailingIcon = {
                         ExposedDropdownMenuDefaults.TrailingIcon(expanded = classExpanded)
                     },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
                     singleLine = true,
                 )
                 ExposedDropdownMenu(
@@ -406,19 +320,24 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 ) {
                     DropdownMenuItem(
                         text = { Text("Not set") },
-                        onClick = { classYear = ""; classExpanded = false },
+                        onClick = {
+                            classYear = ""
+                            classExpanded = false
+                        },
                     )
-                    csuciClasses.forEach { cls ->
+                    CsuciClassYears.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(cls) },
-                            onClick = { classYear = cls; classExpanded = false },
+                            text = { Text(option) },
+                            onClick = {
+                                classYear = option
+                                classExpanded = false
+                            },
                         )
                     }
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Clubs autocomplete multi-select ──────────────────────────
             if (selectedClubs.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -476,11 +395,12 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                                 }
                             },
                             onClick = {
-                                selectedClubs = if (alreadySelected) {
-                                    selectedClubs - club
-                                } else {
-                                    selectedClubs + club
-                                }
+                                selectedClubs =
+                                    if (alreadySelected) {
+                                        selectedClubs - club
+                                    } else {
+                                        selectedClubs + club
+                                    }
                                 clubQuery = ""
                             },
                         )
@@ -489,7 +409,6 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── Visibility ───────────────────────────────────────────────
             VisibilitySelector(
                 title = "Profile Visibility",
                 selectedValue = visibility,
@@ -497,28 +416,68 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                 onValueChange = { visibility = it },
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = presenceExpanded,
+                onExpandedChange = { presenceExpanded = !presenceExpanded },
+            ) {
+                OutlinedTextField(
+                    value = presenceModeOptions.firstOrNull { it.first == presenceMode }?.second ?: "Automatic",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Status") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = presenceExpanded)
+                    },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    singleLine = true,
+                )
+                ExposedDropdownMenu(
+                    expanded = presenceExpanded,
+                    onDismissRequest = { presenceExpanded = false },
+                ) {
+                    presenceModeOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.second) },
+                            onClick = {
+                                presenceMode = option.first
+                                presenceExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ── Save ─────────────────────────────────────────────────────
             Button(
                 onClick = {
                     if (majorQuery.isNotBlank() && major.isEmpty()) {
                         statusMessage = "Please select a valid major from the list."
                         return@Button
                     }
-                    userId?.let {
-                        val profile = hashMapOf(
-                            "name" to name,
-                            "bio" to bio,
-                            "email" to (auth.currentUser?.email ?: ""),
-                            "major" to major,
-                            "clubs" to selectedClubs.toList(),
-                            "classYear" to classYear,
-                            "profilePictureUrl" to profilePictureUrl,
-                            "visibility" to visibility,
-                        )
-                        db.collection("users").document(it)
-                            .set(profile)
+
+                    userId?.let { uid ->
+                        val classValues = if (classYear.isBlank()) emptyList() else listOf(classYear)
+                        val profile =
+                            hashMapOf(
+                                "name" to name,
+                                "bio" to bio,
+                                "email" to (auth.currentUser?.email ?: ""),
+                                "major" to major,
+                                "clubs" to selectedClubs.toList(),
+                                "classYear" to classYear,
+                                "classes" to classValues,
+                                "profilePictureUrl" to profilePictureUrl,
+                                "visibility" to visibility,
+                                "presenceMode" to presenceMode,
+                                "presenceStatus" to UserPresence.statusForMode(presenceMode),
+                                "presenceUpdatedAt" to System.currentTimeMillis(),
+                            )
+
+                        db.collection("users").document(uid)
+                            .set(profile, SetOptions.merge())
                             .addOnSuccessListener {
                                 statusMessage = "Profile saved!"
                                 isEditing = false
@@ -531,10 +490,7 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             ) {
                 Text("Save Profile")
             }
-
         } else {
-
-            // ── View mode ────────────────────────────────────────────────
             Text(
                 text = name.ifEmpty { "No name set" },
                 style = MaterialTheme.typography.headlineSmall,
@@ -553,8 +509,12 @@ fun ProfileScreen(onSignOut: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
             ProfileInfoRow(
                 label = "Clubs",
-                value = if (selectedClubs.isEmpty()) "Not set"
-                else selectedClubs.sorted().joinToString(", ")
+                value =
+                    if (selectedClubs.isEmpty()) {
+                        "Not set"
+                    } else {
+                        selectedClubs.sorted().joinToString(", ")
+                    },
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -572,12 +532,82 @@ fun ProfileScreen(onSignOut: () -> Unit) {
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // --- THEME SELECTOR SECTION ---
+        ThemeSelector(themeViewModel)
+
+        Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedButton(
             onClick = onSignOut,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Sign Out")
+        }
+    }
+}
+
+@Composable
+fun ThemeSelector(viewModel: ThemeViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "App Theme",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Current Theme: ${viewModel.appTheme.label}")
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                AppTheme.entries.forEach { theme ->
+                    DropdownMenuItem(
+                        text = { Text(theme.label) },
+                        onClick = {
+                            viewModel.setTheme(theme)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Dark Mode", style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.weight(1f))
+            Switch(
+                checked = viewModel.isDarkTheme ?: isSystemInDarkTheme(),
+                onCheckedChange = { viewModel.setDarkMode(it) },
+            )
+        }
+        Text(
+            text = if (viewModel.isDarkTheme == null) "Following System" else "Manual Override",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (viewModel.isDarkTheme != null) {
+            TextButton(onClick = { viewModel.setDarkMode(null) }) {
+                Text("Reset to System")
+            }
         }
     }
 }
@@ -591,14 +621,7 @@ fun ProfileInfoRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = "$label:",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.secondary,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Text(text = "$label:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+        Text(text = value, style = MaterialTheme.typography.bodyMedium)
     }
 }

@@ -24,4 +24,6 @@ sealed class AppRoute {
         val conversationId: String,
         val title: String,
     ) : AppRoute()
+
+    data object Events : AppRoute()
 }

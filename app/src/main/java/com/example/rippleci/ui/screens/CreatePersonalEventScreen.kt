@@ -1,6 +1,8 @@
 package com.example.rippleci.ui.screens
 
+import android.os.Build
 import android.widget.NumberPicker
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.rippleci.data.models.PersonalEvent
@@ -83,26 +86,10 @@ fun CreatePersonalEventScreen(
 
         AlertDialog(
             onDismissRequest = { showDateDialog = false },
-            containerColor = Color.White,
-            title = { Text("Select date", color = CalendarRed) },
+            title = { Text("Select date") },
             text = {
                 DatePicker(
                     state = datePickerState,
-                    colors =
-                        DatePickerDefaults.colors(
-                            containerColor = Color.White,
-                            titleContentColor = CalendarRed,
-                            headlineContentColor = CalendarRed,
-                            weekdayContentColor = CalendarRed,
-                            subheadContentColor = CalendarRed,
-                            navigationContentColor = CalendarRed,
-                            selectedDayContainerColor = CalendarRed,
-                            selectedDayContentColor = Color.White,
-                            todayContentColor = CalendarRed,
-                            todayDateBorderColor = CalendarRed,
-                            selectedYearContainerColor = CalendarRed,
-                            selectedYearContentColor = Color.White,
-                        ),
                 )
             },
             confirmButton = {
@@ -120,7 +107,7 @@ fun CreatePersonalEventScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDateDialog = false }) {
-                    Text("Cancel", color = CalendarRed)
+                    Text("Cancel")
                 }
             },
         )
@@ -347,18 +334,28 @@ private fun WheelNumberPicker(
     displayedValues: Array<String>? = null,
     onValueChange: (Int) -> Unit,
 ) {
+    val contentColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val isDark = isSystemInDarkTheme()
+
     AndroidView(
         modifier =
             Modifier
                 .width(92.dp)
                 .height(160.dp),
         factory = { context ->
-            NumberPicker(context).apply {
+            val themedContext = android.view.ContextThemeWrapper(
+                context,
+                if (isDark) android.R.style.Theme_DeviceDefault_Dialog else android.R.style.Theme_DeviceDefault_Light_Dialog
+            )
+            NumberPicker(themedContext).apply {
                 wrapSelectorWheel = true
                 this.minValue = minValue
                 this.maxValue = maxValue
                 this.displayedValues = displayedValues
                 this.value = value
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    textColor = contentColor
+                }
                 setOnValueChangedListener { _, _, newValue ->
                     onValueChange(newValue)
                 }
@@ -371,6 +368,9 @@ private fun WheelNumberPicker(
             picker.displayedValues = displayedValues
             if (picker.value != value) {
                 picker.value = value
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                picker.textColor = contentColor
             }
             picker.wrapSelectorWheel = true
         },

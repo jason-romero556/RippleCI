@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.example.rippleci.data.canViewEvent
 import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.eventSortMillis
+import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserProfile
@@ -72,6 +73,7 @@ fun UserProfileScreen(
     var isPending by remember { mutableStateOf(false) }
     var profileLoaded by remember { mutableStateOf(false) }
     var currentUserFriendIds by remember { mutableStateOf<List<String>?>(null) }
+    var currentUserName by remember { mutableStateOf("") }
     var isFriendListExpanded by remember { mutableStateOf(true) }
     var isClubListExpanded by remember { mutableStateOf(true) }
     var isEventListExpanded by remember { mutableStateOf(true) }
@@ -123,6 +125,7 @@ fun UserProfileScreen(
             .collection("users")
             .document(currentUserId)
             .addSnapshotListener { doc, _ ->
+                currentUserName = doc?.getString("name").orEmpty()
                 val friendIds =
                     (doc?.get("friends") as? List<*>)
                         ?.mapNotNull { it as? String }
@@ -147,7 +150,10 @@ fun UserProfileScreen(
         val request =
             hashMapOf(
                 "fromUserId" to currentUserId,
-                "fromUserName" to (auth.currentUser?.email ?: ""),
+                "fromUserName" to firstNameFromCandidates(
+                    currentUserName,
+                    auth.currentUser?.displayName,
+                ),
                 "toUserId" to userId,
                 "status" to "pending",
                 "timestamp" to System.currentTimeMillis(),

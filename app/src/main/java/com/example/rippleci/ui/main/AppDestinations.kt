@@ -2,7 +2,6 @@ package com.example.rippleci.ui.main
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -18,5 +17,4 @@ enum class AppDestinations(
     FRIENDS("Friends", Icons.Default.Person),
     MESSAGES("Messages", Icons.Default.Email),
     PROFILE("Profile", Icons.Default.AccountBox),
-    EVENTS("Events", Icons.Default.DateRange),
 }
