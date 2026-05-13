@@ -105,6 +105,7 @@ fun ConversationScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             Row(
                 modifier = Modifier

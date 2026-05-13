@@ -33,7 +33,6 @@ fun MessagesScreen(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
         Text("Messages", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
 
