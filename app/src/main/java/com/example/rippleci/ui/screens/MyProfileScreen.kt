@@ -176,12 +176,10 @@ fun ProfileScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(32.dp)
+                .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-
         Text("My Profile", style = MaterialTheme.typography.headlineMedium)
 
         Spacer(modifier = Modifier.height(16.dp))

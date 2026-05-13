@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -14,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.models.ClubProfile
 import com.example.rippleci.data.toUserProfile
+import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.UserLinkRow
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
@@ -32,8 +37,7 @@ fun ClubProfileScreen(
 ) {
     val db = Firebase.firestore
 
-    var clubName by remember { mutableStateOf("") }
-    var memberIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var clubProfile by remember { mutableStateOf(ClubProfile()) }
 
     LaunchedEffect(clubId) {
         db
@@ -41,8 +45,7 @@ fun ClubProfileScreen(
             .document(clubId)
             .get()
             .addOnSuccessListener { doc ->
-                clubName = doc.getString("name").orEmpty()
-                memberIds = (doc.get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                clubProfile = doc.toObject(ClubProfile::class.java)?.copy(id = doc.id) ?: ClubProfile()
             }
     }
 
@@ -50,33 +53,40 @@ fun ClubProfileScreen(
         modifier =
             Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = if (clubName.isNotBlank()) clubName else "Unknown Club",
-            style = MaterialTheme.typography.headlineMedium,
+        ProfileHeader(
+            title = if (clubProfile.name.isNotBlank()) clubProfile.name else "Unknown Club",
+            imageUrl = clubProfile.profilePictureUrl,
+            placeholderIcon = Icons.Default.AccountBox,
+            subtitle = {
+                if (clubProfile.category.isNotBlank()) {
+                    Text(clubProfile.category, style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            actions = {
+                if (isMember) {
+                    OutlinedButton(onClick = onLeaveClub) {
+                        Text("Leave")
+                    }
+                } else {
+                    Button(onClick = onJoinClub) {
+                        Text("Join")
+                    }
+                }
+            }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (isMember) {
-            OutlinedButton(onClick = onLeaveClub) {
-                Text("Leave Club")
-            }
-        } else {
-            Button(onClick = onJoinClub) {
-                Text("Join Club")
-            }
+        if (clubProfile.description.isNotBlank()) {
+            Text(clubProfile.description, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(24.dp))
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         Text("Members", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
-        memberIds.forEach { memberId ->
+        clubProfile.memberIds.forEach { memberId ->
             UserLinkRow(
                 label = memberId,
                 onClick = { onOpenUserProfile(memberId) },

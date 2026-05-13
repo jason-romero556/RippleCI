@@ -46,6 +46,7 @@ import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.FriendListCard
 import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.UserLinkRow
 import com.example.rippleci.ui.components.UserPresenceIndicator
 import com.google.firebase.Firebase
@@ -228,66 +229,37 @@ fun UserProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        )
-        {
-            if (userProfile.profilePictureUrl.isNotBlank()) {
-                AsyncImage(
-                    model = userProfile.profilePictureUrl,
-                    contentDescription = "Profile Picture",
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .size(100.dp)
-                            .clip(CircleShape),
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(56.dp),
-                    tint = MaterialTheme.colorScheme.secondary,
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = userProfile.name.ifBlank { "Unknown User" },
-                    style = MaterialTheme.typography.headlineMedium,
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
+        ProfileHeader(
+            title = userProfile.name.ifBlank { "Unknown User" },
+            imageUrl = userProfile.profilePictureUrl,
+            placeholderIcon = Icons.Default.AccountCircle,
+            subtitle = {
                 UserPresenceIndicator(user = userProfile)
-            }
-
-            if (currentUserId != userId) {
-                when {
-                    isFriend -> {
-                        OutlinedButton(onClick = { showRemoveDialog = true }) {
-                            Text("Friends")
+            },
+            actions = {
+                if (currentUserId != userId) {
+                    when {
+                        isFriend -> {
+                            OutlinedButton(onClick = { showRemoveDialog = true }) {
+                                Text("Friends")
+                            }
                         }
-                    }
 
-                    isPending -> {
-                        OutlinedButton(onClick = {}, enabled = false) {
-                            Text("Pending")
+                        isPending -> {
+                            OutlinedButton(onClick = {}, enabled = false) {
+                                Text("Pending")
+                            }
                         }
-                    }
 
-                    else -> {
-                        Button(onClick = { addFriend() }) {
-                            Text("Add")
+                        else -> {
+                            Button(onClick = { addFriend() }) {
+                                Text("Add")
+                            }
                         }
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        UserPresenceIndicator(user = userProfile)
+        )
 
         ProfileInfoRow("Major", userProfile.major.ifBlank { "Unlisted Major" })
 

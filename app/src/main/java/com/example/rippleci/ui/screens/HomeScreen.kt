@@ -48,10 +48,6 @@ fun HomeScreen(
         personalEvents
             .filterNot { it.isPastEvent(nowMillis) }
             .sortedBy { it.eventSortMillis() }
-    val pastPersonalEvents =
-        personalEvents
-            .filter { it.isPastEvent(nowMillis) }
-            .sortedByDescending { it.eventSortMillis() }
 
     // 1. Fetch Personal Events (Custom Events)
     DisposableEffect(userId) {
@@ -120,28 +116,6 @@ fun HomeScreen(
             Text("No upcoming custom events.", style = MaterialTheme.typography.bodyMedium)
         } else {
             upcomingPersonalEvents.forEach { event ->
-                PersonalEventCard(
-                    event = event,
-                    onClick = { onOpenEventProfile(event.ownerUserId.ifBlank { userId.orEmpty() }, event.id) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Past Custom Events",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        if (pastPersonalEvents.isEmpty()) {
-            Text("No past custom events.", style = MaterialTheme.typography.bodyMedium)
-        } else {
-            pastPersonalEvents.forEach { event ->
                 PersonalEventCard(
                     event = event,
                     onClick = { onOpenEventProfile(event.ownerUserId.ifBlank { userId.orEmpty() }, event.id) },

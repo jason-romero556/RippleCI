@@ -11,16 +11,29 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,7 +81,7 @@ private enum class CampusMapStyle {
     OSM,
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen() {
     val campusSites = remember { campusLocations() }
@@ -82,7 +95,7 @@ fun MapScreen() {
 
     var mapStyle by rememberSaveable { mutableStateOf(CampusMapStyle.GOOGLE) }
     var directoryExpanded by rememberSaveable { mutableStateOf(false) }
-    var plannerExpanded by rememberSaveable { mutableStateOf(true) }
+    var plannerExpanded by rememberSaveable { mutableStateOf(false) }
     var routePanelCollapsed by rememberSaveable { mutableStateOf(false) }
     var selectedLocationId by rememberSaveable { mutableStateOf<String?>(null) }
     var routeStartId by rememberSaveable { mutableStateOf(campusSites.firstOrNull()?.id) }
@@ -139,152 +152,184 @@ fun MapScreen() {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .zIndex(2f),
+    Box(modifier = Modifier.fillMaxSize()) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            properties =
+                MapProperties(
+                    isMyLocationEnabled = locationPermissionState.status.isGranted,
+                    mapType = if (mapStyle == CampusMapStyle.OSM) MapType.NONE else MapType.NORMAL,
+                ),
+            uiSettings =
+                MapUiSettings(
+                    compassEnabled = true,
+                    zoomControlsEnabled = false,
+                    myLocationButtonEnabled = locationPermissionState.status.isGranted,
+                    mapToolbarEnabled = false,
+                ),
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                TopControlBar(
-                    mapStyle = mapStyle,
-                    directoryExpanded = directoryExpanded,
-                    plannerExpanded = plannerExpanded,
-                    onMapStyleChange = { mapStyle = it },
-                    onToggleDirectory = { directoryExpanded = !directoryExpanded },
-                    onTogglePlanner = {
-                        plannerExpanded = !plannerExpanded
-                        if (!plannerExpanded) {
-                            routePanelCollapsed = false
-                        }
+            if (mapStyle == CampusMapStyle.OSM) {
+                TileOverlay(tileProvider = osmTileProvider)
+            }
+
+            visiblePins.forEach { location ->
+                Marker(
+                    state = MarkerState(position = location.coordinate),
+                    title = location.name,
+                    snippet = formatCoordinate(location.coordinate),
+                    onClick = {
+                        selectedLocationId = location.id
+                        false
                     },
                 )
+            }
 
-                Column(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    if (directoryExpanded) {
-                        FloatingPanel(
-                            title = "Building Directory",
-                            collapsed = false,
-                            actionLabel = "Close",
-                            onToggleCollapsed = { directoryExpanded = false },
-                        ) {
-                            DirectoryPanel(
-                                locations = campusSites,
-                                selectedLocationId = selectedLocationId,
-                                onSelectLocation = { location ->
-                                    selectedLocationId = location.id
-                                    routeEndId = location.id
-                                    directoryExpanded = false
-                                },
-                            )
-                        }
-                    }
-
-                    if (plannerExpanded) {
-                        FloatingPanel(
-                            title = "Walking Route",
-                            collapsed = routePanelCollapsed,
-                            onToggleCollapsed = { routePanelCollapsed = !routePanelCollapsed },
-                        ) {
-                            RoutePlannerPanel(
-                                locations = campusSites,
-                                routeStartId = routeStartId,
-                                routeEndId = routeEndId,
-                                routeDistanceMeters = routeDistanceMeters(routePoints),
-                                onStartSelected = { routeStartId = it.id },
-                                onEndSelected = {
-                                    routeEndId = it.id
-                                    selectedLocationId = it.id
-                                },
-                            )
-                        }
-                    }
-
-                    if (!locationPermissionState.status.isGranted) {
-                        Card {
-                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = "Map is available without location access.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                Button(onClick = { locationPermissionState.launchPermissionRequest() }) {
-                                    Text("Enable My Location")
-                                }
-                            }
-                        }
-                    }
-                }
+            if (displayedRoutePoints.size >= 2) {
+                Polyline(
+                    points = displayedRoutePoints,
+                    color = Color(0xFF006D5B),
+                    width = 16f,
+                    startCap = RoundCap(),
+                    endCap = RoundCap(),
+                    jointType = JointType.ROUND,
+                )
             }
         }
 
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-        ) {
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-                properties =
-                    MapProperties(
-                        isMyLocationEnabled = locationPermissionState.status.isGranted,
-                        mapType = if (mapStyle == CampusMapStyle.OSM) MapType.NONE else MapType.NORMAL,
-                    ),
-                uiSettings =
-                    MapUiSettings(
-                        compassEnabled = true,
-                        zoomControlsEnabled = false,
-                        myLocationButtonEnabled = locationPermissionState.status.isGranted,
-                        mapToolbarEnabled = false,
-                    ),
+        if (mapStyle == CampusMapStyle.OSM) {
+            Card(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 16.dp, end = 16.dp),
             ) {
-                if (mapStyle == CampusMapStyle.OSM) {
-                    TileOverlay(tileProvider = osmTileProvider)
-                }
+                Text(
+                    text = "(C) OpenStreetMap contributors",
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                )
+            }
+        }
 
-                visiblePins.forEach { location ->
-                    Marker(
-                        state = MarkerState(position = location.coordinate),
-                        title = location.name,
-                        snippet = formatCoordinate(location.coordinate),
-                        onClick = {
-                            selectedLocationId = location.id
-                            false
-                        },
+        // Overlay Controls
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = directoryExpanded,
+                    onClick = {
+                        directoryExpanded = !directoryExpanded
+                        if (directoryExpanded) plannerExpanded = false
+                    },
+                    label = { Text("Directory") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
                     )
-                }
+                )
 
-                if (displayedRoutePoints.size >= 2) {
-                    Polyline(
-                        points = displayedRoutePoints,
-                        color = Color(0xFF006D5B),
-                        width = 16f,
-                        startCap = RoundCap(),
-                        endCap = RoundCap(),
-                        jointType = JointType.ROUND,
+                FilterChip(
+                    selected = plannerExpanded,
+                    onClick = {
+                        plannerExpanded = !plannerExpanded
+                        if (plannerExpanded) directoryExpanded = false
+                    },
+                    label = { Text("Route") },
+                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Map Style Toggle
+                Box {
+                    var styleMenuExpanded by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = { styleMenuExpanded = true },
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Place, contentDescription = "Map Style")
+                    }
+                    DropdownMenu(
+                        expanded = styleMenuExpanded,
+                        onDismissRequest = { styleMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Google Maps") },
+                            onClick = { mapStyle = CampusMapStyle.GOOGLE; styleMenuExpanded = false },
+                            leadingIcon = { if (mapStyle == CampusMapStyle.GOOGLE) Icon(Icons.Default.Check, null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("OpenStreetMap") },
+                            onClick = { mapStyle = CampusMapStyle.OSM; styleMenuExpanded = false },
+                            leadingIcon = { if (mapStyle == CampusMapStyle.OSM) Icon(Icons.Default.Check, null) }
+                        )
+                    }
+                }
+            }
+
+            if (directoryExpanded) {
+                DirectoryPanel(
+                    locations = campusSites,
+                    selectedLocationId = selectedLocationId,
+                    onSelectLocation = { location ->
+                        selectedLocationId = location.id
+                        routeEndId = location.id
+                        directoryExpanded = false
+                    },
+                )
+            }
+
+            if (plannerExpanded) {
+                FloatingPanel(
+                    title = "Walking Route",
+                    collapsed = routePanelCollapsed,
+                    onToggleCollapsed = { routePanelCollapsed = !routePanelCollapsed },
+                ) {
+                    RoutePlannerPanel(
+                        locations = campusSites,
+                        routeStartId = routeStartId,
+                        routeEndId = routeEndId,
+                        routeDistanceMeters = routeDistanceMeters(routePoints),
+                        onStartSelected = { routeStartId = it.id },
+                        onEndSelected = {
+                            routeEndId = it.id
+                            selectedLocationId = it.id
+                        },
                     )
                 }
             }
 
-            if (mapStyle == CampusMapStyle.OSM) {
-                Card(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(3.dp),
-                ) {
-                    Text(
-                        text = "(C) OpenStreetMap contributors",
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 9.sp,
-                    )
+            if (!locationPermissionState.status.isGranted) {
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Enable location for real-time tracking.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(onClick = { locationPermissionState.launchPermissionRequest() }) {
+                            Text("Enable")
+                        }
+                    }
                 }
             }
         }
@@ -318,46 +363,6 @@ private fun FloatingPanel(
                 HorizontalDivider()
                 content()
             }
-        }
-    }
-}
-
-@Composable
-private fun TopControlBar(
-    mapStyle: CampusMapStyle,
-    directoryExpanded: Boolean,
-    plannerExpanded: Boolean,
-    onMapStyleChange: (CampusMapStyle) -> Unit,
-    onToggleDirectory: () -> Unit,
-    onTogglePlanner: () -> Unit,
-) {
-    val items =
-        listOf(
-            Triple("Google", mapStyle == CampusMapStyle.GOOGLE, { onMapStyleChange(CampusMapStyle.GOOGLE) }),
-            Triple("OSM", mapStyle == CampusMapStyle.OSM, { onMapStyleChange(CampusMapStyle.OSM) }),
-            Triple(if (directoryExpanded) "Hide Dir" else "Directory", directoryExpanded, onToggleDirectory),
-            Triple(if (plannerExpanded) "Hide Route" else "Route", plannerExpanded, onTogglePlanner),
-        )
-    val selectedIndex = items.indexOfFirst { it.second }.coerceAtLeast(0)
-
-    ScrollableTabRow(
-        selectedTabIndex = selectedIndex,
-        edgePadding = 0.dp,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.primary,
-        divider = { HorizontalDivider() },
-    ) {
-        items.forEachIndexed { index, item ->
-            Tab(
-                selected = index == selectedIndex,
-                onClick = item.third,
-                text = {
-                    Text(
-                        text = item.first,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                },
-            )
         }
     }
 }
