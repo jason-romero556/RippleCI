@@ -10,9 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
@@ -56,6 +60,7 @@ fun MainApp(
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
     var routeStack by remember { mutableStateOf<List<AppRoute>>(emptyList()) }
     var requestedFriendsTab by remember { mutableStateOf<Int?>(null) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
     val route = routeStack.lastOrNull() ?: AppRoute.MainTabs
 
     fun navigateTo(nextRoute: AppRoute) {
@@ -170,23 +175,21 @@ fun MainApp(
                             .fillMaxWidth(),
                 )
                 {
-                    HelpfulLinksMenuButton(
-                        modifier =
-                            Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 8.dp),
-                        tint = topBarContentColor,
-                    )
-                    Text(
-                        text = if (route is AppRoute.Events) "Events" else currentDestination.label,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.align(Alignment.Center),
-                        color = topBarContentColor,
-                    )
-                    if (routeStack.isNotEmpty()) {
+                    if (routeStack.isEmpty()) {
+                        HelpfulLinksMenuButton(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 8.dp),
+                            tint = topBarContentColor,
+                        )
+                    } else {
                         IconButton(
                             onClick = { popRoute() },
-                            modifier = Modifier.align(Alignment.CenterEnd),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 8.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -195,7 +198,58 @@ fun MainApp(
                             )
                         }
                     }
+
+                    val title = when (val currentRoute = route) {
+                        is AppRoute.Conversation -> currentRoute.title
+                        is AppRoute.Events -> "Events"
+                        is AppRoute.UserProfile -> "User Profile"
+                        is AppRoute.ClubProfile -> "Club Profile"
+                        is AppRoute.UserGroupProfile -> "Group Profile"
+                        is AppRoute.EventProfile -> "Event Profile"
+                        AppRoute.MainTabs -> currentDestination.label
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.align(Alignment.Center),
+                        color = topBarContentColor,
+                    )
+
+                    if (route is AppRoute.Conversation) {
+                        IconButton(
+                            onClick = { showClearChatDialog = true },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Clear Chat",
+                                tint = topBarContentColor,
+                            )
+                        }
+                    }
                 }
+            }
+
+            if (showClearChatDialog && route is AppRoute.Conversation) {
+                AlertDialog(
+                    onDismissRequest = { showClearChatDialog = false },
+                    title = { Text("Clear Chat History") },
+                    text = { Text("This will delete all messages for you. Are you sure?") },
+                    confirmButton = {
+                        Button(onClick = {
+                            messagesViewModel.clearChatHistory(route.conversationId) {
+                                showClearChatDialog = false
+                            }
+                        }) { Text("Clear") }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { showClearChatDialog = false }) {
+                            Text("Cancel")
+                        }
+                    },
+                )
             }
 
             when (val currentRoute = route) {
