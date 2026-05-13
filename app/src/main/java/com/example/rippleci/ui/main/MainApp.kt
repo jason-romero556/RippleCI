@@ -387,6 +387,9 @@ fun MainApp(
                         userGroupId = currentRoute.userGroupId,
                         onBack = { popRoute() },
                         onOpenUserProfile = { userId -> navigateTo(AppRoute.UserProfile(userId)) },
+                        onOpenEventProfile = { eventId, ownerUserId, groupId ->
+                            navigateTo(AppRoute.EventProfile(eventId, ownerUserId, groupId))
+                        },
                     )
                 }
 
@@ -394,6 +397,7 @@ fun MainApp(
                     EventProfileScreen(
                         eventId = currentRoute.eventId,
                         ownerUserId = currentRoute.ownerUserId,
+                        groupId = currentRoute.groupId,
                         onBack = { popRoute() },
                         onOpenUserProfile = { userId ->
                             navigateTo(AppRoute.UserProfile(userId))

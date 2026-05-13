@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,6 +32,7 @@ import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.EventVisibilityOptions
+import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.ProfileInfoRow
 import com.example.rippleci.ui.components.UserLinkRow
 import com.example.rippleci.ui.components.VisibilitySelector
@@ -43,6 +46,7 @@ import com.google.firebase.firestore.firestore
 fun EventProfileScreen(
     eventId: String,
     ownerUserId: String,
+    groupId: String = "",
     onBack: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
     onOpenClubProfile: (String) -> Unit,
@@ -80,15 +84,16 @@ fun EventProfileScreen(
     var attendeeProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var attendeesExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(eventId, currentUserId, eventOwnerUserId) {
+    val eventRef = if (groupId.isNotBlank()) {
+        db.collection("userGroups").document(groupId).collection("events").document(eventId)
+    } else {
+        db.collection("users").document(eventOwnerUserId).collection("personalEvents").document(eventId)
+    }
+
+    LaunchedEffect(eventId, currentUserId, eventOwnerUserId, groupId) {
         if (currentUserId.isBlank()) return@LaunchedEffect
 
-        db
-            .collection("users")
-            .document(eventOwnerUserId)
-            .collection("personalEvents")
-            .document(eventId)
-            .get()
+        eventRef.get()
             .addOnSuccessListener { doc ->
                 if (!doc.exists()) return@addOnSuccessListener
 
@@ -187,13 +192,6 @@ fun EventProfileScreen(
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
         val inviteId = "${eventDocumentOwnerUserId}_${eventId}_${user.id}"
 
-        val eventRef =
-            db
-                .collection("users")
-                .document(eventDocumentOwnerUserId)
-                .collection("personalEvents")
-                .document(eventId)
-
         val inviteRef =
             db
                 .collection("eventInvites")
@@ -206,6 +204,7 @@ fun EventProfileScreen(
             mapOf(
                 "eventId" to eventId,
                 "ownerUserId" to eventDocumentOwnerUserId,
+                "groupId" to groupId,
                 "fromUserId" to currentUserId,
                 "toUserId" to user.id,
                 "eventTitle" to title,
@@ -227,15 +226,10 @@ fun EventProfileScreen(
             currentUserId.isNotBlank() &&
                 (currentUserId == eventDocumentOwnerUserId || currentUserId == createdByUserId)
 
-        if (!canManageEvent || eventDocumentOwnerUserId.isBlank() || eventId.isBlank()) return
+        if (!canManageEvent || eventId.isBlank()) return
         if (newVisibility == visibility) return
 
-        db
-            .collection("users")
-            .document(eventDocumentOwnerUserId)
-            .collection("personalEvents")
-            .document(eventId)
-            .update("visibility", newVisibility)
+        eventRef.update("visibility", newVisibility)
             .addOnSuccessListener {
                 visibility = newVisibility
                 statusMessage = "Visibility updated."
@@ -250,18 +244,10 @@ fun EventProfileScreen(
             currentUserId.isNotBlank() &&
                 (currentUserId == eventDocumentOwnerUserId || currentUserId == createdByUserId)
 
-        if (!canManageEvent || eventDocumentOwnerUserId.isBlank() || eventId.isBlank()) return
-
-        val eventRef =
-            db
-                .collection("users")
-                .document(eventDocumentOwnerUserId)
-                .collection("personalEvents")
-                .document(eventId)
+        if (!canManageEvent || eventId.isBlank()) return
 
         db
             .collection("eventInvites")
-            .whereEqualTo("ownerUserId", eventDocumentOwnerUserId)
             .whereEqualTo("eventId", eventId)
             .get()
             .addOnSuccessListener { result ->
@@ -277,21 +263,11 @@ fun EventProfileScreen(
     }
 
     fun leaveEvent() {
-        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
-
-        if (currentUserId.isBlank() || eventDocumentOwnerUserId.isBlank() || eventId.isBlank()) return
+        if (currentUserId.isBlank() || eventId.isBlank()) return
         if (!attendeeIds.contains(currentUserId)) return
-
-        val eventRef =
-            db
-                .collection("users")
-                .document(eventDocumentOwnerUserId)
-                .collection("personalEvents")
-                .document(eventId)
 
         db
             .collection("eventInvites")
-            .whereEqualTo("ownerUserId", eventDocumentOwnerUserId)
             .whereEqualTo("eventId", eventId)
             .whereEqualTo("toUserId", currentUserId)
             .get()
@@ -421,20 +397,17 @@ fun EventProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = title.ifBlank { "Untitled Event" },
-            style = MaterialTheme.typography.headlineMedium,
+        ProfileHeader(
+            title = title.ifBlank { "Untitled Event" },
+            placeholderIcon = Icons.Default.Info,
+            subtitle = {
+                Text(
+                    text = listOf(date, startTime).filter { it.isNotBlank() }.joinToString(" at "),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ProfileInfoRow("Date", date.ifBlank { "Not set" })
-        ProfileInfoRow(
-            "Time",
-            listOf(startTime, endTime).filter { it.isNotBlank() }.joinToString(" - ").ifBlank { "Not set" },
-        )
         ProfileInfoRow("Location", location.ifBlank { "Not set" })
 
         Spacer(modifier = Modifier.height(16.dp))

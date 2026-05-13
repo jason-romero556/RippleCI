@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -24,10 +26,9 @@ import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.data.toUserProfile
-import com.example.rippleci.ui.components.EventVisibilityOptions
 import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.UserLinkRow
-import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
@@ -38,6 +39,7 @@ fun UserGroupProfileScreen(
     userGroupId: String,
     onBack: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
+    onOpenEventProfile: (String, String, String) -> Unit,
 ) {
     val db = Firebase.firestore
 
@@ -64,8 +66,6 @@ fun UserGroupProfileScreen(
     var showOwnerLeaveDialog by remember { mutableStateOf(false) }
     var showCreateEventScreen by remember { mutableStateOf(false) }
     var groupEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
-    var selectedGroupEvent by remember { mutableStateOf<PersonalEvent?>(null) }
-    var groupEventStatusMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(userGroupId) {
         db
@@ -290,84 +290,6 @@ fun UserGroupProfileScreen(
             }
     }
 
-    fun joinGroupEvent(event: PersonalEvent) {
-        if (currentUserId.isBlank() || event.id.isBlank()) return
-        if (event.isPastEvent()) return
-
-        db
-            .collection("userGroups")
-            .document(userGroupId)
-            .collection("events")
-            .document(event.id)
-            .update("attendeeIds", FieldValue.arrayUnion(currentUserId))
-    }
-
-    fun leaveGroupEvent(event: PersonalEvent) {
-        if (currentUserId.isBlank() || event.id.isBlank()) return
-
-        db
-            .collection("userGroups")
-            .document(userGroupId)
-            .collection("events")
-            .document(event.id)
-            .update("attendeeIds", FieldValue.arrayRemove(currentUserId))
-            .addOnSuccessListener {
-                val updatedEvent = event.copy(attendeeIds = event.attendeeIds.filterNot { it == currentUserId })
-                groupEvents =
-                    groupEvents.map { groupEvent ->
-                        if (groupEvent.id == event.id) updatedEvent else groupEvent
-                    }
-                selectedGroupEvent = updatedEvent
-            }
-    }
-
-    fun canManageGroupEvent(event: PersonalEvent): Boolean =
-        currentUserId.isNotBlank() &&
-            (event.ownerUserId == currentUserId || event.createdByUserId == currentUserId)
-
-    fun updateGroupEventVisibility(
-        event: PersonalEvent,
-        newVisibility: String,
-    ) {
-        if (!canManageGroupEvent(event) || event.id.isBlank()) return
-        if (newVisibility == event.visibility) return
-
-        db
-            .collection("userGroups")
-            .document(userGroupId)
-            .collection("events")
-            .document(event.id)
-            .update("visibility", newVisibility)
-            .addOnSuccessListener {
-                val updatedEvent = event.copy(visibility = newVisibility)
-                groupEvents =
-                    groupEvents.map { groupEvent ->
-                        if (groupEvent.id == event.id) updatedEvent else groupEvent
-                    }
-                selectedGroupEvent = updatedEvent
-                groupEventStatusMessage = "Visibility updated."
-            }.addOnFailureListener { error ->
-                groupEventStatusMessage = error.message ?: "Could not update visibility."
-            }
-    }
-
-    fun deleteGroupEvent(event: PersonalEvent) {
-        if (!canManageGroupEvent(event) || event.id.isBlank()) return
-
-        db
-            .collection("userGroups")
-            .document(userGroupId)
-            .collection("events")
-            .document(event.id)
-            .delete()
-            .addOnSuccessListener {
-                selectedGroupEvent = null
-                groupEventStatusMessage = ""
-            }.addOnFailureListener { error ->
-                groupEventStatusMessage = error.message ?: "Could not delete event."
-            }
-    }
-
     if (showInviteDialog) {
         AlertDialog(
             onDismissRequest = { showInviteDialog = false },
@@ -462,131 +384,6 @@ fun UserGroupProfileScreen(
         )
     }
 
-    selectedGroupEvent?.let { event ->
-        val isAttending = event.attendeeIds.contains(currentUserId)
-        val canManageEvent = canManageGroupEvent(event)
-        val eventHasPassed = event.isPastEvent()
-        var attendeesExpanded by remember(event.id) { mutableStateOf(false) }
-        var showDeleteEventDialog by remember(event.id) { mutableStateOf(false) }
-        val memberById = memberProfiles.associateBy { it.id }
-
-        if (showDeleteEventDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteEventDialog = false },
-                title = { Text("Delete Event") },
-                text = { Text("Are you sure you want to delete ${event.title.ifBlank { "this event" }}?") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showDeleteEventDialog = false
-                            deleteGroupEvent(event)
-                        },
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                            ),
-                    ) {
-                        Text("Delete")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(onClick = { showDeleteEventDialog = false }) {
-                        Text("Cancel")
-                    }
-                },
-            )
-        } else {
-            AlertDialog(
-                onDismissRequest = { selectedGroupEvent = null },
-                title = { Text(event.title.ifBlank { "Group Event" }) },
-                text = {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        Text(event.description.ifBlank { "No description yet." })
-                        Text("${event.date} ${event.startTime} - ${event.endTime}")
-                        Text("${event.attendeeIds.size} attending")
-
-                        TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
-                            Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
-                        }
-
-                        if (attendeesExpanded) {
-                            event.attendeeIds.forEach { attendeeId ->
-                                val attendee = memberById[attendeeId]
-                                UserLinkRow(
-                                    label =
-                                        attendee
-                                            ?.name
-                                            ?.ifBlank { attendee.email }
-                                            ?.ifBlank { attendeeId }
-                                            ?: attendeeId,
-                                    onClick = { onOpenUserProfile(attendeeId) },
-                                )
-                            }
-                        }
-
-                        if (canManageEvent) {
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            VisibilitySelector(
-                                title = "Event Visibility",
-                                selectedValue = event.visibility,
-                                options = EventVisibilityOptions,
-                                onValueChange = { updateGroupEventVisibility(event, it) },
-                            )
-
-                            if (groupEventStatusMessage.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(groupEventStatusMessage, color = MaterialTheme.colorScheme.secondary)
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Button(
-                                onClick = { showDeleteEventDialog = true },
-                                colors =
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error,
-                                    ),
-                            ) {
-                                Text("Delete Event")
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    if (eventHasPassed) {
-                        OutlinedButton(
-                            onClick = {},
-                            enabled = false,
-                        ) {
-                            Text("Past Event")
-                        }
-                    } else if (isAttending) {
-                        OutlinedButton(
-                            onClick = { leaveGroupEvent(event) },
-                        ) {
-                            Text("Leave Event")
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                joinGroupEvent(event)
-                                selectedGroupEvent = null
-                            },
-                        ) {
-                            Text("Join Event")
-                        }
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { selectedGroupEvent = null }) {
-                        Text("Close")
-                    }
-                },
-            )
-        }
-    }
-
     if (showCreateEventScreen) {
         CreatePersonalEventScreen(
             onSave = { newEvent -> createGroupEvent(newEvent) },
@@ -612,23 +409,29 @@ fun UserGroupProfileScreen(
                 .filter { it.isPastEvent(nowMillis) }
                 .sortedByDescending { it.eventSortMillis() }
 
-        if (isMember) {
-            OutlinedButton(
-                onClick = {
-                    if (isOwner) showOwnerLeaveDialog = true else showLeaveDialog = true
-                },
-            ) {
-                Text("Leave Group")
+        ProfileHeader(
+            title = userGroupName.ifBlank { "Unknown group" },
+            placeholderIcon = Icons.Default.AccountBox,
+            subtitle = {
+                Text("${memberIds.size} members", style = MaterialTheme.typography.bodyMedium)
+            },
+            actions = {
+                if (isMember) {
+                    OutlinedButton(
+                        onClick = {
+                            if (isOwner) showOwnerLeaveDialog = true else showLeaveDialog = true
+                        },
+                    ) {
+                        Text("Leave")
+                    }
+                }
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = userGroupName.ifBlank { "Unknown group" },
-            style = MaterialTheme.typography.headlineMedium,
         )
-        Spacer(modifier = Modifier.height(8.dp))
+
+        if (description.isNotBlank()) {
+            Text(description, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         if (canManageMembers) {
             Button(onClick = { showInviteDialog = true }) {
@@ -654,8 +457,7 @@ fun UserGroupProfileScreen(
                 PersonalEventCard(
                     event = event,
                     onClick = {
-                        groupEventStatusMessage = ""
-                        selectedGroupEvent = event
+                        onOpenEventProfile(event.id, event.ownerUserId, userGroupId)
                     },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -674,8 +476,7 @@ fun UserGroupProfileScreen(
                 PersonalEventCard(
                     event = event,
                     onClick = {
-                        groupEventStatusMessage = ""
-                        selectedGroupEvent = event
+                        onOpenEventProfile(event.id, event.ownerUserId, userGroupId)
                     },
                 )
                 Spacer(modifier = Modifier.height(8.dp))
