@@ -52,14 +52,14 @@ android {
 }
 
 dependencies {
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.firebase:firebase-storage")
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
-    implementation("com.google.maps.android:maps-compose:4.4.1") // Added by Sameen
-    implementation("com.google.accompanist:accompanist-permissions:0.34.0") // Added by Sameen
+    implementation("com.google.maps.android:maps-compose:8.3.0") // Added by Sameen
+    implementation("com.google.accompanist:accompanist-permissions:0.37.3") // Added by Sameen
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     implementation(libs.firebase.messaging)
     implementation(libs.androidx.core.ktx)
@@ -70,6 +70,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.play.services.maps)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
@@ -83,14 +85,14 @@ dependencies {
     // --- JASON'S EVENT SCREEN DEPENDENCIES ---
 
     // ViewModel Compose (Allows viewModels() to work in EventsScreen)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
 
     // Retrofit & OkHttp (For fetching events from the web)
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
 
     // KotlinX Serialization (For parsing the JSON into your SchoolEvent class)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
     implementation(libs.androidx.datastore.preferences)
 }
