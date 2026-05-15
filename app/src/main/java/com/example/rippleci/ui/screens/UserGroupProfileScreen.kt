@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -26,9 +27,11 @@ import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.data.toUserProfile
+import com.example.rippleci.ui.components.GroupVisibilityOptions
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.UserLinkRow
+import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
@@ -61,6 +64,11 @@ fun UserGroupProfileScreen(
     var invitedUserIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentUserName by remember { mutableStateOf("") }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var groupVisibility by remember { mutableStateOf("public") }
+    var showEditGroupDialog by remember { mutableStateOf(false) }
+    var editedGroupName by remember { mutableStateOf("") }
+    var editedGroupDescription by remember { mutableStateOf("") }
+    var editedGroupVisibility by remember { mutableStateOf("public") }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showOwnerLeaveDialog by remember { mutableStateOf(false) }
@@ -78,6 +86,7 @@ fun UserGroupProfileScreen(
                 ownerUserId = doc.getString("ownerUserId").orEmpty()
                 adminIds = (doc.get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 memberIds = (doc.get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                groupVisibility = doc.getString("visibility") ?: "public"
                 invitedUserIds =
                     (doc.get("invitedUserIds") as? List<*>)
                         ?.mapNotNull { it as? String }
@@ -254,10 +263,47 @@ fun UserGroupProfileScreen(
     }
 
     fun promoteToAdmin(memberId: String) {
+        if (!canManageMembers || memberId == ownerUserId) return
+
         db
             .collection("userGroups")
             .document(userGroupId)
             .update("adminIds", FieldValue.arrayUnion(memberId))
+            .addOnSuccessListener {
+                adminIds = (adminIds + memberId).distinct()
+            }
+    }
+
+    fun demoteAdmin(memberId: String) {
+        if (!canManageMembers || memberId == ownerUserId) return
+
+        db
+            .collection("userGroups")
+            .document(userGroupId)
+            .update("adminIds", FieldValue.arrayRemove(memberId))
+            .addOnSuccessListener {
+                adminIds = adminIds.filterNot { it == memberId }
+            }
+    }
+
+    fun updateGroupProfile() {
+        if (!canManageMembers || editedGroupName.isBlank()) return
+
+        db
+            .collection("userGroups")
+            .document(userGroupId)
+            .update(
+                mapOf(
+                    "name" to editedGroupName.trim(),
+                    "description" to editedGroupDescription.trim(),
+                    "visibility" to editedGroupVisibility,
+                ),
+            ).addOnSuccessListener {
+                userGroupName = editedGroupName.trim()
+                description = editedGroupDescription.trim()
+                groupVisibility = editedGroupVisibility
+                showEditGroupDialog = false
+            }
     }
 
     fun createGroupEvent(newEvent: PersonalEvent) {
@@ -325,6 +371,54 @@ fun UserGroupProfileScreen(
             confirmButton = {
                 TextButton(onClick = { showInviteDialog = false }) {
                     Text("Done")
+                }
+            },
+        )
+    }
+
+    if (showEditGroupDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditGroupDialog = false },
+            title = { Text("Edit Group") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editedGroupName,
+                        onValueChange = { editedGroupName = it },
+                        label = { Text("Group name") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = editedGroupDescription,
+                        onValueChange = { editedGroupDescription = it },
+                        label = { Text("Description") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    VisibilitySelector(
+                        title = "Group Visibility",
+                        selectedValue = editedGroupVisibility,
+                        options = GroupVisibilityOptions,
+                        onValueChange = { editedGroupVisibility = it },
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { updateGroupProfile() },
+                    enabled = editedGroupName.isNotBlank(),
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showEditGroupDialog = false }) {
+                    Text("Cancel")
                 }
             },
         )
@@ -416,6 +510,18 @@ fun UserGroupProfileScreen(
                 Text("${memberIds.size} members", style = MaterialTheme.typography.bodyMedium)
             },
             actions = {
+                if (canManageMembers) {
+                    OutlinedButton(
+                        onClick = {
+                            editedGroupName = userGroupName
+                            editedGroupDescription = description
+                            editedGroupVisibility = groupVisibility
+                            showEditGroupDialog = true
+                        },
+                    ) {
+                        Text("Edit")
+                    }
+                }
                 if (isMember) {
                     OutlinedButton(
                         onClick = {
@@ -425,7 +531,7 @@ fun UserGroupProfileScreen(
                         Text("Leave")
                     }
                 }
-            }
+            },
         )
 
         if (description.isNotBlank()) {
@@ -508,13 +614,16 @@ fun UserGroupProfileScreen(
                     Text("Kick")
                 }
 
-                if (!adminIds.contains(member.id)) {
+                if (adminIds.contains(member.id)) {
+                    OutlinedButton(onClick = { demoteAdmin(member.id) }) {
+                        Text("Remove Admin")
+                    }
+                } else {
                     Button(onClick = { promoteToAdmin(member.id) }) {
                         Text("Make Admin")
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(8.dp))
         }
     }

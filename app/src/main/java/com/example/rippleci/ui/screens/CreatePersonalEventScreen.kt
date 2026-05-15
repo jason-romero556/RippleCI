@@ -18,6 +18,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -44,24 +46,30 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val CalendarRed = Color(0xFFB3261E)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePersonalEventScreen(
+    initialEvent: PersonalEvent? = null,
+    saveButtonText: String = if (initialEvent == null) "Save Event" else "Save Changes",
     onSave: (PersonalEvent) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
-    var selectedStartMinutes by remember { mutableStateOf<Int?>(null) }
-    var selectedEndMinutes by remember { mutableStateOf<Int?>(null) }
+    var title by remember(initialEvent?.id) { mutableStateOf(initialEvent?.title.orEmpty()) }
+    var description by remember(initialEvent?.id) { mutableStateOf(initialEvent?.description.orEmpty()) }
+    var location by remember(initialEvent?.id) { mutableStateOf(initialEvent?.location.orEmpty()) }
+    var selectedDateMillis by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.startAtMillis?.takeIf { it > 0L }?.let(::localDateStartMillis))
+    }
+    var selectedStartMinutes by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.startAtMillis?.takeIf { it > 0L }?.let(::minutesOfDay))
+    }
+    var selectedEndMinutes by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.endAtMillis?.takeIf { it > 0L }?.let(::minutesOfDay))
+    }
     var showDateDialog by remember { mutableStateOf(false) }
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
-    var visibility by remember { mutableStateOf("public") }
+    var visibility by remember(initialEvent?.id) { mutableStateOf(initialEvent?.visibility ?: "public") }
     var statusMessage by remember { mutableStateOf("") }
 
     val dateLabel = selectedDateMillis?.let { formatEventDate(it) } ?: "Select date"
@@ -76,41 +84,76 @@ fun CreatePersonalEventScreen(
             selectedEndMinutes != null
 
     if (showDateDialog) {
+        val colorScheme = MaterialTheme.colorScheme
+        val baseTypography = MaterialTheme.typography
+        val calendarTypography =
+            baseTypography.copy(
+                titleLarge = baseTypography.titleLarge.copy(shadow = null),
+                titleMedium = baseTypography.titleMedium.copy(shadow = null),
+                bodyLarge = baseTypography.bodyLarge.copy(shadow = null),
+                bodyMedium = baseTypography.bodyMedium.copy(shadow = null),
+                bodySmall = baseTypography.bodySmall.copy(shadow = null),
+                labelLarge = baseTypography.labelLarge.copy(shadow = null),
+            )
+
         val datePickerState =
             rememberDatePickerState(
                 initialSelectedDateMillis =
                     datePickerLocalDateMillisToUtcMillis(
                         selectedDateMillis ?: System.currentTimeMillis(),
                     ),
+                initialDisplayMode = DisplayMode.Picker,
             )
 
-        AlertDialog(
-            onDismissRequest = { showDateDialog = false },
-            title = { Text("Select date") },
-            text = {
-                DatePicker(
-                    state = datePickerState,
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = calendarTypography,
+        ) {
+            DatePickerDialog(
+                onDismissRequest = { showDateDialog = false },
+                colors =
+                    DatePickerDefaults.colors(
+                        containerColor = colorScheme.surface,
+                        titleContentColor = colorScheme.onSurface,
+                        headlineContentColor = colorScheme.onSurface,
+                        navigationContentColor = colorScheme.primary,
+                        selectedDayContainerColor = colorScheme.primary,
+                        selectedDayContentColor = colorScheme.onPrimary,
+                        todayContentColor = colorScheme.primary,
+                        todayDateBorderColor = colorScheme.primary,
+                        selectedYearContainerColor = colorScheme.primary,
+                        selectedYearContentColor = colorScheme.onPrimary,
+                    ),
+                confirmButton = {
+                    Button(onClick = {
                         datePickerState.selectedDateMillis?.let { utcMillis ->
                             selectedDateMillis = datePickerUtcMillisToLocalDateMillis(utcMillis)
                         }
                         showDateDialog = false
                         statusMessage = ""
-                    },
-                ) {
-                    Text("Done")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDateDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
+                    }) {
+                        Text("Done")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDateDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
+            ) {
+                DatePicker(
+                    state = datePickerState,
+                    showModeToggle = false,
+                    colors =
+                        DatePickerDefaults.colors(
+                            selectedDayContainerColor = colorScheme.primary,
+                            selectedDayContentColor = colorScheme.onPrimary,
+                            todayContentColor = colorScheme.primary,
+                            todayDateBorderColor = colorScheme.primary,
+                        ),
+                )
+            }
+        }
     }
 
     if (showStartTimeDialog) {
@@ -239,7 +282,9 @@ fun CreatePersonalEventScreen(
                     else -> {
                         onSave(
                             PersonalEvent(
+                                id = initialEvent?.id.orEmpty(),
                                 title = title.trim(),
+                                ownerUserId = initialEvent?.ownerUserId.orEmpty(),
                                 description = description.trim(),
                                 location = location.trim(),
                                 date = formatEventDate(startMillis),
@@ -248,6 +293,10 @@ fun CreatePersonalEventScreen(
                                 startAtMillis = startMillis,
                                 endAtMillis = endMillis,
                                 visibility = visibility,
+                                groupId = initialEvent?.groupId.orEmpty(),
+                                createdByUserId = initialEvent?.createdByUserId.orEmpty(),
+                                attendeeIds = initialEvent?.attendeeIds.orEmpty(),
+                                invitedUserIds = initialEvent?.invitedUserIds.orEmpty(),
                             ),
                         )
                     }
@@ -256,7 +305,7 @@ fun CreatePersonalEventScreen(
             modifier = Modifier.fillMaxWidth(),
             enabled = canAttemptSave,
         ) {
-            Text("Save Event")
+            Text(saveButtonText)
         }
 
         OutlinedButton(
@@ -343,10 +392,11 @@ private fun WheelNumberPicker(
                 .width(92.dp)
                 .height(160.dp),
         factory = { context ->
-            val themedContext = android.view.ContextThemeWrapper(
-                context,
-                if (isDark) android.R.style.Theme_DeviceDefault_Dialog else android.R.style.Theme_DeviceDefault_Light_Dialog
-            )
+            val themedContext =
+                android.view.ContextThemeWrapper(
+                    context,
+                    if (isDark) android.R.style.Theme_DeviceDefault_Dialog else android.R.style.Theme_DeviceDefault_Light_Dialog,
+                )
             NumberPicker(themedContext).apply {
                 wrapSelectorWheel = true
                 this.minValue = minValue
@@ -376,6 +426,22 @@ private fun WheelNumberPicker(
         },
     )
 }
+
+private fun localDateStartMillis(millis: Long): Long =
+    Calendar
+        .getInstance()
+        .apply {
+            timeInMillis = millis
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+private fun minutesOfDay(millis: Long): Int =
+    Calendar.getInstance().apply { timeInMillis = millis }.let {
+        it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)
+    }
 
 private fun combineEventMillis(
     dateMillis: Long?,
@@ -462,8 +528,7 @@ private fun datePickerLocalDateMillisToUtcMillis(localMillis: Long): Long {
         }.timeInMillis
 }
 
-private fun formatEventDate(millis: Long): String =
-    SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
+private fun formatEventDate(millis: Long): String = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
 
 private fun formatEventTime(minutes: Int): String {
     val calendar =

@@ -63,6 +63,9 @@ fun EventProfileScreen(
     var attendeeIds by remember { mutableStateOf(emptyList<String>()) }
     var invitedUserIds by remember { mutableStateOf(emptyList<String>()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var showEditEventScreen by remember { mutableStateOf(false) }
+    var groupOwnerUserId by remember { mutableStateOf("") }
+    var groupAdminIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
@@ -84,16 +87,26 @@ fun EventProfileScreen(
     var attendeeProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var attendeesExpanded by remember { mutableStateOf(false) }
 
-    val eventRef = if (groupId.isNotBlank()) {
-        db.collection("userGroups").document(groupId).collection("events").document(eventId)
-    } else {
-        db.collection("users").document(eventOwnerUserId).collection("personalEvents").document(eventId)
-    }
+    val eventRef =
+        if (groupId.isNotBlank()) {
+            db
+                .collection("userGroups")
+                .document(groupId)
+                .collection("events")
+                .document(eventId)
+        } else {
+            db
+                .collection("users")
+                .document(eventOwnerUserId)
+                .collection("personalEvents")
+                .document(eventId)
+        }
 
     LaunchedEffect(eventId, currentUserId, eventOwnerUserId, groupId) {
         if (currentUserId.isBlank()) return@LaunchedEffect
 
-        eventRef.get()
+        eventRef
+            .get()
             .addOnSuccessListener { doc ->
                 if (!doc.exists()) return@addOnSuccessListener
 
@@ -140,6 +153,21 @@ fun EventProfileScreen(
                     .addOnSuccessListener { userDoc ->
                         creatorProfile = userDoc.toUserProfile()
                     }
+            }
+    }
+
+    LaunchedEffect(groupId) {
+        if (groupId.isBlank()) return@LaunchedEffect
+
+        db
+            .collection("userGroups")
+            .document(groupId)
+            .get()
+            .addOnSuccessListener { doc ->
+                groupOwnerUserId = doc.getString("ownerUserId").orEmpty()
+                groupAdminIds = (doc.get("adminIds") as? List<*>)
+                    ?.mapNotNull { it as? String }
+                    ?: emptyList()
             }
     }
 
@@ -220,16 +248,57 @@ fun EventProfileScreen(
         }
     }
 
-    fun updateEventVisibility(newVisibility: String) {
+    fun canManageLoadedEvent(): Boolean {
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
-        val canManageEvent =
-            currentUserId.isNotBlank() &&
-                (currentUserId == eventDocumentOwnerUserId || currentUserId == createdByUserId)
+        val canManageGroupEvent =
+            groupId.isNotBlank() &&
+                (currentUserId == groupOwnerUserId || groupAdminIds.contains(currentUserId))
 
-        if (!canManageEvent || eventId.isBlank()) return
+        return currentUserId.isNotBlank() &&
+            (
+                currentUserId == eventDocumentOwnerUserId ||
+                    currentUserId == createdByUserId ||
+                    canManageGroupEvent
+            )
+    }
+
+    fun updateEvent(updatedEvent: PersonalEvent) {
+        if (!canManageLoadedEvent() || eventId.isBlank()) return
+
+        eventRef
+            .update(
+                mapOf(
+                    "title" to updatedEvent.title,
+                    "description" to updatedEvent.description,
+                    "location" to updatedEvent.location,
+                    "date" to updatedEvent.date,
+                    "startTime" to updatedEvent.startTime,
+                    "endTime" to updatedEvent.endTime,
+                    "startAtMillis" to updatedEvent.startAtMillis,
+                    "endAtMillis" to updatedEvent.endAtMillis,
+                    "visibility" to updatedEvent.visibility,
+                ),
+            ).addOnSuccessListener {
+                title = updatedEvent.title
+                description = updatedEvent.description
+                location = updatedEvent.location
+                date = updatedEvent.date
+                startTime = updatedEvent.startTime
+                endTime = updatedEvent.endTime
+                startAtMillis = updatedEvent.startAtMillis
+                endAtMillis = updatedEvent.endAtMillis
+                visibility = updatedEvent.visibility
+                showEditEventScreen = false
+                statusMessage = "Event updated."
+            }
+    }
+
+    fun updateEventVisibility(newVisibility: String) {
+        if (!canManageLoadedEvent() || eventId.isBlank()) return
         if (newVisibility == visibility) return
 
-        eventRef.update("visibility", newVisibility)
+        eventRef
+            .update("visibility", newVisibility)
             .addOnSuccessListener {
                 visibility = newVisibility
                 statusMessage = "Visibility updated."
@@ -239,12 +308,7 @@ fun EventProfileScreen(
     }
 
     fun deleteEvent() {
-        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
-        val canManageEvent =
-            currentUserId.isNotBlank() &&
-                (currentUserId == eventDocumentOwnerUserId || currentUserId == createdByUserId)
-
-        if (!canManageEvent || eventId.isBlank()) return
+        if (!canManageLoadedEvent() || eventId.isBlank()) return
 
         db
             .collection("eventInvites")
@@ -390,6 +454,24 @@ fun EventProfileScreen(
         return
     }
 
+    val canManageEvent = canManageLoadedEvent()
+
+    if (showEditEventScreen && canManageEvent) {
+        CreatePersonalEventScreen(
+            initialEvent =
+                currentEvent.copy(
+                    title = title,
+                    description = description,
+                    location = location,
+                    groupId = groupId,
+                ),
+            saveButtonText = "Save Changes",
+            onSave = { updateEvent(it) },
+            onCancel = { showEditEventScreen = false },
+        )
+        return
+    }
+
     Column(
         modifier =
             Modifier
@@ -403,9 +485,9 @@ fun EventProfileScreen(
             subtitle = {
                 Text(
                     text = listOf(date, startTime).filter { it.isNotBlank() }.joinToString(" at "),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
-            }
+            },
         )
 
         ProfileInfoRow("Location", location.ifBlank { "Not set" })
@@ -446,10 +528,6 @@ fun EventProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
-        val canManageEvent =
-            currentUserId.isNotBlank() &&
-                (currentUserId == eventDocumentOwnerUserId || currentUserId == createdByUserId)
         val canLeaveEvent =
             currentUserId.isNotBlank() &&
                 attendeeIds.contains(currentUserId) &&
@@ -473,6 +551,13 @@ fun EventProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text("Manage Event", style = MaterialTheme.typography.titleMedium)
+
+            Button(onClick = { showEditEventScreen = true }) {
+                Text("Edit Event")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Spacer(modifier = Modifier.height(8.dp))
 
             VisibilitySelector(
