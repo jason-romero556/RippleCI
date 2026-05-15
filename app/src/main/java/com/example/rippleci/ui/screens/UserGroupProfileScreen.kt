@@ -1,25 +1,31 @@
 package com.example.rippleci.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.isPastEvent
@@ -28,14 +34,18 @@ import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.GroupVisibilityOptions
+import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.ProfileHeader
-import com.example.rippleci.ui.components.UserLinkRow
+import com.example.rippleci.ui.components.UserActionMenuButton
+import com.example.rippleci.ui.components.UserActionMenuItem
 import com.example.rippleci.ui.components.VisibilitySelector
+import com.example.rippleci.ui.components.createImageCaptureUri
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.storage
 
 @Composable
 fun UserGroupProfileScreen(
@@ -45,6 +55,8 @@ fun UserGroupProfileScreen(
     onOpenEventProfile: (String, String, String) -> Unit,
 ) {
     val db = Firebase.firestore
+    val storage = Firebase.storage
+    val context = LocalContext.current
 
     val currentUserId =
         Firebase.auth.currentUser
@@ -58,6 +70,7 @@ fun UserGroupProfileScreen(
     var isAdmin = adminIds.contains(currentUserId)
     var canManageMembers = isOwner || isAdmin
     var userGroupName by remember { mutableStateOf("") }
+    var groupProfilePictureUrl by remember { mutableStateOf("") }
     var memberIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var memberProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     val isMember = memberIds.contains(currentUserId)
@@ -68,12 +81,50 @@ fun UserGroupProfileScreen(
     var showEditGroupDialog by remember { mutableStateOf(false) }
     var editedGroupName by remember { mutableStateOf("") }
     var editedGroupDescription by remember { mutableStateOf("") }
+    var editedGroupProfilePictureUrl by remember { mutableStateOf("") }
+    var isUploadingGroupImage by remember { mutableStateOf(false) }
+    var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var editedGroupVisibility by remember { mutableStateOf("public") }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showOwnerLeaveDialog by remember { mutableStateOf(false) }
     var showCreateEventScreen by remember { mutableStateOf(false) }
     var groupEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+
+    fun uploadGroupImage(uri: Uri) {
+        isUploadingGroupImage = true
+
+        val storageRef =
+            storage.reference.child("group_pictures/$userGroupId/${System.currentTimeMillis()}.jpg")
+
+        storageRef
+            .putFile(uri)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    editedGroupProfilePictureUrl = downloadUrl.toString()
+                    isUploadingGroupImage = false
+                }
+            }.addOnFailureListener {
+                isUploadingGroupImage = false
+            }
+    }
+
+    val groupImagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let(::uploadGroupImage)
+        }
+
+    val groupCameraLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture(),
+        ) { didCapture ->
+            val uri = pendingGroupCameraUri
+            if (didCapture && uri != null) {
+                uploadGroupImage(uri)
+            }
+        }
 
     LaunchedEffect(userGroupId) {
         db
@@ -83,6 +134,7 @@ fun UserGroupProfileScreen(
             .addOnSuccessListener { doc ->
                 userGroupName = doc.getString("name").orEmpty()
                 description = doc.getString("description").orEmpty()
+                groupProfilePictureUrl = doc.getString("profilePictureUrl").orEmpty()
                 ownerUserId = doc.getString("ownerUserId").orEmpty()
                 adminIds = (doc.get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 memberIds = (doc.get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -296,11 +348,13 @@ fun UserGroupProfileScreen(
                 mapOf(
                     "name" to editedGroupName.trim(),
                     "description" to editedGroupDescription.trim(),
+                    "profilePictureUrl" to editedGroupProfilePictureUrl.trim(),
                     "visibility" to editedGroupVisibility,
                 ),
             ).addOnSuccessListener {
                 userGroupName = editedGroupName.trim()
                 description = editedGroupDescription.trim()
+                groupProfilePictureUrl = editedGroupProfilePictureUrl.trim()
                 groupVisibility = editedGroupVisibility
                 showEditGroupDialog = false
             }
@@ -317,9 +371,11 @@ fun UserGroupProfileScreen(
                 "endTime" to newEvent.endTime,
                 "startAtMillis" to newEvent.startAtMillis,
                 "endAtMillis" to newEvent.endAtMillis,
+                "imageUrl" to newEvent.imageUrl,
                 "groupId" to userGroupId,
                 "createdByUserId" to currentUserId,
                 "attendeeIds" to emptyList<String>(),
+                "blockedUserIds" to emptyList<String>(),
                 "visibility" to newEvent.visibility,
                 "createdAt" to System.currentTimeMillis(),
                 "ownerUserId" to currentUserId,
@@ -400,6 +456,20 @@ fun UserGroupProfileScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    ImageUploadControls(
+                        imageUrl = editedGroupProfilePictureUrl,
+                        isUploading = isUploadingGroupImage,
+                        onChooseFromLibrary = { groupImagePickerLauncher.launch("image/*") },
+                        onUseCamera = {
+                            val uri = createImageCaptureUri(context, "group_images")
+                            pendingGroupCameraUri = uri
+                            groupCameraLauncher.launch(uri)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     VisibilitySelector(
                         title = "Group Visibility",
                         selectedValue = editedGroupVisibility,
@@ -411,7 +481,7 @@ fun UserGroupProfileScreen(
             confirmButton = {
                 Button(
                     onClick = { updateGroupProfile() },
-                    enabled = editedGroupName.isNotBlank(),
+                    enabled = editedGroupName.isNotBlank() && !isUploadingGroupImage,
                 ) {
                     Text("Save")
                 }
@@ -505,23 +575,12 @@ fun UserGroupProfileScreen(
 
         ProfileHeader(
             title = userGroupName.ifBlank { "Unknown group" },
+            imageUrl = groupProfilePictureUrl,
             placeholderIcon = Icons.Default.AccountBox,
             subtitle = {
                 Text("${memberIds.size} members", style = MaterialTheme.typography.bodyMedium)
             },
             actions = {
-                if (canManageMembers) {
-                    OutlinedButton(
-                        onClick = {
-                            editedGroupName = userGroupName
-                            editedGroupDescription = description
-                            editedGroupVisibility = groupVisibility
-                            showEditGroupDialog = true
-                        },
-                    ) {
-                        Text("Edit")
-                    }
-                }
                 if (isMember) {
                     OutlinedButton(
                         onClick = {
@@ -539,14 +598,42 @@ fun UserGroupProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        if (canManageMembers || isMember) {
+            Text("Manage Group", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         if (canManageMembers) {
-            Button(onClick = { showInviteDialog = true }) {
+            OutlinedButton(
+                onClick = {
+                    editedGroupName = userGroupName
+                    editedGroupDescription = description
+                    editedGroupProfilePictureUrl = groupProfilePictureUrl
+                    editedGroupVisibility = groupVisibility
+                    showEditGroupDialog = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Edit Group")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = { showInviteDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text("Invite Friends")
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
         if (isMember) {
-            Button(onClick = { showCreateEventScreen = true }) {
+            Button(
+                onClick = { showCreateEventScreen = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text("Create Group Event")
             }
         }
@@ -604,24 +691,41 @@ fun UserGroupProfileScreen(
                     else -> "Member"
                 }
 
-            UserLinkRow(
-                label = "${member.name.ifBlank { member.email.ifBlank { member.id } }} - $role",
-                onClick = { onOpenUserProfile(member.id) },
-            )
-
-            if (canManageMembers && member.id != currentUserId && member.id != ownerUserId) {
-                OutlinedButton(onClick = { kickMember(member.id) }) {
-                    Text("Kick")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { onOpenUserProfile(member.id) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("${member.name.ifBlank { member.email.ifBlank { member.id } }} - $role")
                 }
 
-                if (adminIds.contains(member.id)) {
-                    OutlinedButton(onClick = { demoteAdmin(member.id) }) {
-                        Text("Remove Admin")
-                    }
-                } else {
-                    Button(onClick = { promoteToAdmin(member.id) }) {
-                        Text("Make Admin")
-                    }
+                if (canManageMembers && member.id != currentUserId && member.id != ownerUserId) {
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    UserActionMenuButton(
+                        actions =
+                            listOf(
+                                if (adminIds.contains(member.id)) {
+                                    UserActionMenuItem(
+                                        label = "Remove Admin",
+                                        onClick = { demoteAdmin(member.id) },
+                                    )
+                                } else {
+                                    UserActionMenuItem(
+                                        label = "Make Admin",
+                                        onClick = { promoteToAdmin(member.id) },
+                                    )
+                                },
+                                UserActionMenuItem(
+                                    label = "Kick from Group",
+                                    onClick = { kickMember(member.id) },
+                                    destructive = true,
+                                ),
+                            ),
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))

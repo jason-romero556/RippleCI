@@ -4,6 +4,7 @@ import com.example.rippleci.data.models.ClubEvent
 import com.example.rippleci.data.models.ClubProfile
 import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.MESSAGE_PRIVACY_FRIENDS
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.SchoolEvent
 import com.example.rippleci.data.models.UserGroupInvite
@@ -33,6 +34,7 @@ fun DocumentSnapshot.toUserProfile(): UserProfile {
         presenceStatus = getString("presenceStatus").orEmpty().ifBlank { "closed" },
         presenceUpdatedAt = getLong("presenceUpdatedAt") ?: 0L,
         visibility = getString("visibility") ?: "public",
+        messagePrivacy = getString("messagePrivacy") ?: MESSAGE_PRIVACY_FRIENDS,
     )
 }
 
@@ -63,6 +65,8 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
         createdByUserId = getString("createdByUserId").orEmpty(),
         attendeeIds = (get("attendeeIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         invitedUserIds = (get("invitedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        blockedUserIds = (get("blockedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        imageUrl = getString("imageUrl").orEmpty().ifBlank { getString("profilePictureUrl").orEmpty() },
     )
 
 fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
@@ -82,6 +86,7 @@ fun DocumentSnapshot.toEventInvite(): EventInvite =
         id = id,
         eventId = getString("eventId").orEmpty(),
         ownerUserId = getString("ownerUserId").orEmpty(),
+        groupId = getString("groupId").orEmpty(),
         fromUserId = getString("fromUserId").orEmpty(),
         toUserId = getString("toUserId").orEmpty(),
         eventTitle = getString("eventTitle").orEmpty(),
@@ -123,6 +128,7 @@ fun DocumentSnapshot.toUserGroupProfile(): UserGroupProfile =
         memberIds = (get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         adminIds = (get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         visibility = getString("visibility") ?: "public",
+        profilePictureUrl = getString("profilePictureUrl").orEmpty(),
     )
 
 fun DocumentSnapshot.toUserGroupInvite(): UserGroupInvite =

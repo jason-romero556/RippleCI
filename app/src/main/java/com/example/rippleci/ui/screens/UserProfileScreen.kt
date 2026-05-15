@@ -1,27 +1,18 @@
 package com.example.rippleci.ui.screens
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,31 +22,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.example.rippleci.data.canViewEvent
 import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.isPastEvent
+import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.FriendListCard
+import com.example.rippleci.ui.components.FriendshipStatusMenuButton
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.ProfileHeader
-import com.example.rippleci.ui.components.UserLinkRow
 import com.example.rippleci.ui.components.UserPresenceIndicator
+import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.auth.User
 import com.google.firebase.firestore.firestore
 
 @Composable
@@ -63,9 +51,11 @@ fun UserProfileScreen(
     userId: String,
     onBack: () -> Unit,
     onProfileLoaded: (String, String) -> Unit = { _, _ -> },
+    onOpenConversation: (String, String) -> Unit,
     onOpenUserProfile: (String, String) -> Unit,
     onOpenClubProfile: (String) -> Unit,
-    onOpenEventProfile: (String) -> Unit,
+    onOpenEventProfile: (String, String, String) -> Unit,
+    messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -74,15 +64,17 @@ fun UserProfileScreen(
     var userProfile by remember { mutableStateOf(UserProfile()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isFriend by remember { mutableStateOf(false) }
     var isPending by remember { mutableStateOf(false) }
+    var pendingRequestIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var profileLoaded by remember { mutableStateOf(false) }
     var currentUserFriendIds by remember { mutableStateOf<List<String>?>(null) }
     var currentUserName by remember { mutableStateOf("") }
     var isFriendListExpanded by remember { mutableStateOf(true) }
     var isClubListExpanded by remember { mutableStateOf(true) }
     var isEventListExpanded by remember { mutableStateOf(true) }
-    var showFriendshipDialog by remember { mutableStateOf(false) }
+    var showPastEvents by remember { mutableStateOf(false) }
     var hasBlockedUser by remember { mutableStateOf(false) }
     var isBlockedByUser by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -96,6 +88,8 @@ fun UserProfileScreen(
         profileLoaded = false
         friendProfiles = emptyList()
         personalEvents = emptyList()
+        attendingEvents = emptyList()
+        showPastEvents = false
         db
             .collection("users")
             .document(userId)
@@ -128,17 +122,92 @@ fun UserProfileScreen(
                         personalEvents =
                             result.documents.map { it.toPersonalEvent().copy(ownerUserId = userId) }
                     }
+
+                db
+                    .collection("eventInvites")
+                    .whereEqualTo("toUserId", userId)
+                    .whereEqualTo("status", "accepted")
+                    .get()
+                    .addOnSuccessListener { result ->
+                        attendingEvents = emptyList()
+
+                        result.documents.forEach { inviteDoc ->
+                            val acceptedEventId = inviteDoc.getString("eventId").orEmpty()
+                            val acceptedEventOwnerUserId = inviteDoc.getString("ownerUserId").orEmpty()
+                            val acceptedEventGroupId = inviteDoc.getString("groupId").orEmpty()
+
+                            if (acceptedEventId.isBlank()) return@forEach
+
+                            val eventRef =
+                                if (acceptedEventGroupId.isNotBlank()) {
+                                    db
+                                        .collection("userGroups")
+                                        .document(acceptedEventGroupId)
+                                        .collection("events")
+                                        .document(acceptedEventId)
+                                } else {
+                                    db
+                                        .collection("users")
+                                        .document(acceptedEventOwnerUserId)
+                                        .collection("personalEvents")
+                                        .document(acceptedEventId)
+                                }
+
+                            eventRef.get().addOnSuccessListener { eventDoc ->
+                                if (!eventDoc.exists()) return@addOnSuccessListener
+
+                                val event =
+                                    eventDoc.toPersonalEvent().copy(
+                                        id = eventDoc.id,
+                                        ownerUserId =
+                                            eventDoc
+                                                .getString("ownerUserId")
+                                                .orEmpty()
+                                                .ifBlank { acceptedEventOwnerUserId },
+                                        groupId =
+                                            acceptedEventGroupId.ifBlank {
+                                                eventDoc.getString("groupId").orEmpty()
+                                            },
+                                    )
+
+                                attendingEvents =
+                                    (
+                                        attendingEvents.filterNot {
+                                            it.id == event.id &&
+                                                it.ownerUserId == event.ownerUserId &&
+                                                it.groupId == event.groupId
+                                        } + event
+                                    )
+                            }
+                        }
+                    }
             }
     }
 
     LaunchedEffect(currentUserId, userId) {
         if (currentUserId.isBlank()) {
             currentUserFriendIds = emptyList()
+            pendingRequestIds = emptyList()
+            isPending = false
             return@LaunchedEffect
         }
 
         if (currentUserId == userId) {
-            currentUserFriendIds = emptyList()
+            pendingRequestIds = emptyList()
+            isPending = false
+
+            db
+                .collection("users")
+                .document(currentUserId)
+                .addSnapshotListener { doc, _ ->
+                    currentUserName = doc?.getString("name").orEmpty()
+                    currentUserFriendIds =
+                        (doc?.get("friends") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            ?: emptyList()
+                    isFriend = false
+                }
+
             return@LaunchedEffect
         }
 
@@ -158,10 +227,14 @@ fun UserProfileScreen(
         db
             .collection("friendRequests")
             .whereEqualTo("fromUserId", currentUserId)
-            .whereEqualTo("toUserId", userId)
             .whereEqualTo("status", "pending")
             .addSnapshotListener { snapshot, _ ->
-                isPending = snapshot?.isEmpty == false
+                pendingRequestIds =
+                    snapshot
+                        ?.documents
+                        ?.mapNotNull { it.getString("toUserId") }
+                        ?: emptyList()
+                isPending = pendingRequestIds.contains(userId)
             }
     }
 
@@ -218,8 +291,9 @@ fun UserProfileScreen(
         }
     }
 
-    fun addFriend() {
-        if (currentUserId.isBlank() || currentUserId == userId) return
+    fun addFriend(targetUserId: String = userId) {
+        if (currentUserId.isBlank() || currentUserId == targetUserId) return
+        if (targetUserId in hiddenUserIds) return
 
         val request =
             hashMapOf(
@@ -229,7 +303,7 @@ fun UserProfileScreen(
                         currentUserName,
                         auth.currentUser?.displayName,
                     ),
-                "toUserId" to userId,
+                "toUserId" to targetUserId,
                 "status" to "pending",
                 "timestamp" to System.currentTimeMillis(),
             )
@@ -237,19 +311,19 @@ fun UserProfileScreen(
         db.collection("friendRequests").add(request)
     }
 
-    fun removeFriend() {
-        if (currentUserId.isBlank() || currentUserId == userId) return
+    fun removeFriend(targetUserId: String = userId) {
+        if (currentUserId.isBlank() || currentUserId == targetUserId) return
 
         val batch = db.batch()
 
         batch.update(
             db.collection("users").document(currentUserId),
             "friends",
-            FieldValue.arrayRemove(userId),
+            FieldValue.arrayRemove(targetUserId),
         )
 
         batch.update(
-            db.collection("users").document(userId),
+            db.collection("users").document(targetUserId),
             "friends",
             FieldValue.arrayRemove(currentUserId),
         )
@@ -257,19 +331,20 @@ fun UserProfileScreen(
         batch.commit()
     }
 
-    fun blockUser() {
-        if (currentUserId.isBlank() || currentUserId == userId) return
+    fun blockUser(targetProfile: UserProfile = userProfile) {
+        val targetUserId = targetProfile.id
+        if (currentUserId.isBlank() || currentUserId == targetUserId || targetUserId.isBlank()) return
 
         val outgoingRequests =
             db
                 .collection("friendRequests")
                 .whereEqualTo("fromUserId", currentUserId)
-                .whereEqualTo("toUserId", userId)
+                .whereEqualTo("toUserId", targetUserId)
 
         val incomingRequests =
             db
                 .collection("friendRequests")
-                .whereEqualTo("fromUserId", userId)
+                .whereEqualTo("fromUserId", targetUserId)
                 .whereEqualTo("toUserId", currentUserId)
 
         outgoingRequests
@@ -282,24 +357,24 @@ fun UserProfileScreen(
                         val blockRef =
                             db
                                 .collection("blockedUsers")
-                                .document(blockDocumentId(currentUserId, userId))
+                                .document(blockDocumentId(currentUserId, targetUserId))
 
                         batch.set(
                             blockRef,
                             mapOf(
                                 "blockerUserId" to currentUserId,
-                                "blockedUserId" to userId,
-                                "blockedUserName" to userProfile.name,
+                                "blockedUserId" to targetUserId,
+                                "blockedUserName" to targetProfile.name,
                                 "createdAt" to System.currentTimeMillis(),
                             ),
                         )
                         batch.update(
                             db.collection("users").document(currentUserId),
                             "friends",
-                            FieldValue.arrayRemove(userId),
+                            FieldValue.arrayRemove(targetUserId),
                         )
                         batch.update(
-                            db.collection("users").document(userId),
+                            db.collection("users").document(targetUserId),
                             "friends",
                             FieldValue.arrayRemove(currentUserId),
                         )
@@ -309,27 +384,31 @@ fun UserProfileScreen(
                         }
 
                         batch.commit().addOnSuccessListener {
-                            hasBlockedUser = true
-                            blockedUserIds = blockedUserIds + userId
-                            isFriend = false
-                            isPending = false
-                            showFriendshipDialog = false
+                            blockedUserIds = blockedUserIds + targetUserId
+                            friendProfiles = friendProfiles.filterNot { it.id == targetUserId }
+                            pendingRequestIds = pendingRequestIds.filterNot { it == targetUserId }
+                            if (targetUserId == userId) {
+                                hasBlockedUser = true
+                                isFriend = false
+                                isPending = false
+                            }
                         }
                     }
             }
     }
 
-    fun unblockUser() {
-        if (currentUserId.isBlank() || currentUserId == userId) return
+    fun unblockUser(targetUserId: String = userId) {
+        if (currentUserId.isBlank() || currentUserId == targetUserId) return
 
         db
             .collection("blockedUsers")
-            .document(blockDocumentId(currentUserId, userId))
+            .document(blockDocumentId(currentUserId, targetUserId))
             .delete()
             .addOnSuccessListener {
-                hasBlockedUser = false
-                blockedUserIds = blockedUserIds - userId
-                showFriendshipDialog = false
+                blockedUserIds = blockedUserIds - targetUserId
+                if (targetUserId == userId) {
+                    hasBlockedUser = false
+                }
             }
     }
 
@@ -349,91 +428,21 @@ fun UserProfileScreen(
     }
 
     val visiblePersonalEvents =
-        personalEvents.filter { event ->
+        (personalEvents + attendingEvents)
+            .distinctBy { event -> "${event.groupId}|${event.ownerUserId}|${event.id}" }
+            .filter { event ->
             canViewEvent(event, currentUserId, currentUserFriendIds.orEmpty())
         }
     val visibleFriendProfiles =
         friendProfiles.filter { friend ->
             friend.id !in hiddenUserIds
         }
-
-    if (showFriendshipDialog) {
-        AlertDialog(
-            onDismissRequest = { showFriendshipDialog = false },
-            title = { Text("Friendship Status") },
-            text = {
-                Column {
-                    Text("Manage your connection with ${userProfile.name.ifBlank { "this user" }}.")
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    when {
-                        hasBlockedUser -> {
-                            Button(
-                                onClick = { unblockUser() },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Unblock")
-                            }
-                        }
-
-                        isFriend -> {
-                            OutlinedButton(
-                                onClick = {
-                                    removeFriend()
-                                    showFriendshipDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Remove Friend")
-                            }
-                        }
-
-                        isPending -> {
-                            OutlinedButton(
-                                onClick = {},
-                                enabled = false,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Friend Request Pending")
-                            }
-                        }
-
-                        else -> {
-                            Button(
-                                onClick = {
-                                    addFriend()
-                                    showFriendshipDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Send Friend Request")
-                            }
-                        }
-                    }
-
-                    if (!hasBlockedUser) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { blockUser() },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                ),
-                        ) {
-                            Text("Block User")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showFriendshipDialog = false }) {
-                    Text("Close")
-                }
-            },
-        )
-    }
+    val displayName = userProfile.name.ifBlank { userProfile.email.ifBlank { "Unknown User" } }
+    val canMessageUser =
+        currentUserId != userId &&
+            !hasBlockedUser &&
+            !isBlockedByUser &&
+            (isFriend || userProfile.messagePrivacy == MESSAGE_PRIVACY_EVERYONE)
 
     Column(
         modifier =
@@ -443,29 +452,25 @@ fun UserProfileScreen(
                 .padding(16.dp),
     ) {
         ProfileHeader(
-            title = userProfile.name.ifBlank { "Unknown User" },
+            title = displayName,
             imageUrl = userProfile.profilePictureUrl,
             placeholderIcon = Icons.Default.AccountCircle,
+            imageSize = 128.dp,
             subtitle = {
                 UserPresenceIndicator(user = userProfile)
             },
             actions = {
                 if (currentUserId != userId) {
-                    val label =
-                        when {
-                            hasBlockedUser -> "Blocked"
-                            isFriend -> "Friends"
-                            isPending -> "Pending"
-                            else -> "Not Friends"
-                        }
-
-                    OutlinedButton(onClick = { showFriendshipDialog = true }) {
-                        Text(label)
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Manage friendship",
-                        )
-                    }
+                    FriendshipStatusMenuButton(
+                        isFriend = isFriend,
+                        isPending = isPending,
+                        hasBlockedUser = hasBlockedUser,
+                        onAddFriend = { addFriend() },
+                        onRemoveFriend = { removeFriend() },
+                        onBlockUser = { blockUser() },
+                        onUnblockUser = { unblockUser() },
+                        compact = true,
+                    )
                 }
             },
         )
@@ -476,24 +481,49 @@ fun UserProfileScreen(
 
         ProfileInfoRow("Bio", userProfile.bio.ifBlank { "No bio yet" })
 
+        if (canMessageUser) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    messagesViewModel.getOrCreateDMConversation(
+                        otherUserId = userId,
+                        otherUserName = displayName,
+                    ) { conversationId ->
+                        onOpenConversation(conversationId, displayName)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Send Message")
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        CollapsibleSection(
-            title = "Friends List",
-            expanded = isFriendListExpanded,
-            onToggle = { isFriendListExpanded = !isFriendListExpanded },
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
+        if (visibleFriendProfiles.isEmpty()) {
+            Text("No friends yet")
+        } else {
+            CollapsibleSection(
+                title = "Friends List",
+                expanded = isFriendListExpanded,
+                onToggle = { isFriendListExpanded = !isFriendListExpanded },
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            if (visibleFriendProfiles.isEmpty()) {
-                Text("No friends yet")
-            } else {
                 visibleFriendProfiles.forEach { friend ->
                     FriendListCard(
                         user = friend,
+                        isFriend = currentUserFriendIds.orEmpty().contains(friend.id),
+                        isPending = pendingRequestIds.contains(friend.id),
+                        hasBlockedUser = blockedUserIds.contains(friend.id),
                         onViewProfile = {
                             onOpenUserProfile(friend.id, friend.name.ifBlank { friend.email })
                         },
+                        onAddFriend = { addFriend(friend.id) },
+                        onRemoveFriend = { removeFriend(friend.id) },
+                        onBlockUser = { blockUser(friend) },
+                        onUnblockUser = { unblockUser(friend.id) },
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -506,7 +536,7 @@ fun UserProfileScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             CollapsibleSection(
-                title = "Events",
+                title = "Attending Events",
                 expanded = isEventListExpanded,
                 onToggle = { isEventListExpanded = !isEventListExpanded },
             ) {
@@ -522,48 +552,68 @@ fun UserProfileScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (upcomingEvents.isNotEmpty()) {
+                if (upcomingEvents.isEmpty()) {
+                    Text("No upcoming visible events.")
+                } else {
                     Text("Upcoming Events", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     upcomingEvents.forEach { event ->
                         PersonalEventCard(
                             event = event,
-                            onClick = { onOpenEventProfile(event.id) },
+                            onClick = {
+                                onOpenEventProfile(
+                                    event.id,
+                                    event.ownerUserId.ifBlank { userId },
+                                    event.groupId,
+                                )
+                            },
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
 
                 if (pastEvents.isNotEmpty()) {
+                    TextButton(onClick = { showPastEvents = !showPastEvents }) {
+                        Text(if (showPastEvents) "Hide past events" else "View past events")
+                    }
+                }
+
+                if (showPastEvents && pastEvents.isNotEmpty()) {
                     Text("Past Events", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     pastEvents.forEach { event ->
                         PersonalEventCard(
                             event = event,
-                            onClick = { onOpenEventProfile(event.id) },
+                            onClick = {
+                                onOpenEventProfile(
+                                    event.id,
+                                    event.ownerUserId.ifBlank { userId },
+                                    event.groupId,
+                                )
+                            },
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
         } else {
-            Text("No visible personal events.")
+            Text("No visible attending events.")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        CollapsibleSection(
-            title = "Clubs",
-            expanded = isClubListExpanded,
-            onToggle = { isClubListExpanded = !isClubListExpanded },
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
+        if (userProfile.clubIds.isEmpty()) {
+            Text("No clubs listed.")
+        } else {
+            CollapsibleSection(
+                title = "Clubs",
+                expanded = isClubListExpanded,
+                onToggle = { isClubListExpanded = !isClubListExpanded },
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            if (userProfile.clubIds.isEmpty()) {
-                Text("No clubs listed.")
-            } else {
                 userProfile.clubIds.forEach { clubId ->
                     ClubLinkRow(
                         label = clubId,

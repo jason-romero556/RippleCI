@@ -61,6 +61,8 @@ import com.example.rippleci.data.CsuciClassYears
 import com.example.rippleci.data.CsuciClubs
 import com.example.rippleci.data.CsuciMajors
 import com.example.rippleci.data.UserPresence
+import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
+import com.example.rippleci.data.models.MESSAGE_PRIVACY_FRIENDS
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.theme.AppTheme
@@ -94,9 +96,17 @@ fun ProfileScreen(
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf("public") }
+    var messagePrivacy by remember { mutableStateOf(MESSAGE_PRIVACY_FRIENDS) }
     var presenceMode by remember { mutableStateOf(UserPresence.AUTOMATIC) }
     var classExpanded by remember { mutableStateOf(false) }
+    var messagePrivacyExpanded by remember { mutableStateOf(false) }
     var presenceExpanded by remember { mutableStateOf(false) }
+
+    val messagePrivacyOptions =
+        listOf(
+            MESSAGE_PRIVACY_FRIENDS to "Friends only",
+            MESSAGE_PRIVACY_EVERYONE to "Anyone",
+        )
 
     val presenceModeOptions =
         listOf(
@@ -167,6 +177,7 @@ fun ProfileScreen(
                             ?: ""
                     profilePictureUrl = doc.getString("profilePictureUrl") ?: ""
                     visibility = doc.getString("visibility") ?: "public"
+                    messagePrivacy = doc.getString("messagePrivacy") ?: MESSAGE_PRIVACY_FRIENDS
                     presenceMode = doc.getString("presenceMode") ?: UserPresence.AUTOMATIC
                 }
         }
@@ -417,6 +428,39 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             ExposedDropdownMenuBox(
+                expanded = messagePrivacyExpanded,
+                onExpandedChange = { messagePrivacyExpanded = !messagePrivacyExpanded },
+            ) {
+                OutlinedTextField(
+                    value = messagePrivacyOptions.firstOrNull { it.first == messagePrivacy }?.second ?: "Friends only",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Messages") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = messagePrivacyExpanded)
+                    },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    singleLine = true,
+                )
+                ExposedDropdownMenu(
+                    expanded = messagePrivacyExpanded,
+                    onDismissRequest = { messagePrivacyExpanded = false },
+                ) {
+                    messagePrivacyOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.second) },
+                            onClick = {
+                                messagePrivacy = option.first
+                                messagePrivacyExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ExposedDropdownMenuBox(
                 expanded = presenceExpanded,
                 onExpandedChange = { presenceExpanded = !presenceExpanded },
             ) {
@@ -469,6 +513,7 @@ fun ProfileScreen(
                                 "classes" to classValues,
                                 "profilePictureUrl" to profilePictureUrl,
                                 "visibility" to visibility,
+                                "messagePrivacy" to messagePrivacy,
                                 "presenceMode" to presenceMode,
                                 "presenceStatus" to UserPresence.statusForMode(presenceMode),
                                 "presenceUpdatedAt" to System.currentTimeMillis(),
@@ -504,6 +549,11 @@ fun ProfileScreen(
             ProfileInfoRow(label = "Major", value = major.ifEmpty { "Not set" })
             Spacer(modifier = Modifier.height(8.dp))
             ProfileInfoRow(label = "Class Year", value = classYear.ifEmpty { "Not set" })
+            Spacer(modifier = Modifier.height(8.dp))
+            ProfileInfoRow(
+                label = "Messages",
+                value = messagePrivacyOptions.firstOrNull { it.first == messagePrivacy }?.second ?: "Friends only",
+            )
             Spacer(modifier = Modifier.height(8.dp))
             ProfileInfoRow(
                 label = "Clubs",

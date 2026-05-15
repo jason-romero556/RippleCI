@@ -1,10 +1,13 @@
 package com.example.rippleci.ui.screens
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -23,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.canViewEvent
@@ -34,6 +38,8 @@ import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.EventVisibilityOptions
 import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.ProfileInfoRow
+import com.example.rippleci.ui.components.UserActionMenuButton
+import com.example.rippleci.ui.components.UserActionMenuItem
 import com.example.rippleci.ui.components.UserLinkRow
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.google.firebase.Firebase
@@ -73,6 +79,7 @@ fun EventProfileScreen(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
+    var imageUrl by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
     var startTime by remember { mutableStateOf("") }
     var endTime by remember { mutableStateOf("") }
@@ -86,6 +93,7 @@ fun EventProfileScreen(
     var currentUserFriendIds by remember { mutableStateOf<List<String>?>(null) }
     var attendeeProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var attendeesExpanded by remember { mutableStateOf(false) }
+    var blockedUserIds by remember { mutableStateOf(emptyList<String>()) }
 
     val eventRef =
         if (groupId.isNotBlank()) {
@@ -113,6 +121,7 @@ fun EventProfileScreen(
                 title = doc.getString("title").orEmpty()
                 description = doc.getString("description").orEmpty()
                 location = doc.getString("location").orEmpty()
+                imageUrl = doc.getString("imageUrl").orEmpty().ifBlank { doc.getString("profilePictureUrl").orEmpty() }
                 date = doc.getString("date").orEmpty()
                 startTime = doc.getString("startTime").orEmpty()
                 endTime = doc.getString("endTime").orEmpty()
@@ -143,6 +152,11 @@ fun EventProfileScreen(
 
                 invitedUserIds =
                     (doc.get("invitedUserIds") as? List<*>)
+                        ?.mapNotNull { it as? String }
+                        ?: emptyList()
+
+                blockedUserIds =
+                    (doc.get("blockedUserIds") as? List<*>)
                         ?.mapNotNull { it as? String }
                         ?: emptyList()
 
@@ -217,6 +231,8 @@ fun EventProfileScreen(
     }
 
     fun inviteUser(user: UserProfile) {
+        if (blockedUserIds.contains(user.id)) return
+
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
         val inviteId = "${eventDocumentOwnerUserId}_${eventId}_${user.id}"
 
@@ -276,6 +292,7 @@ fun EventProfileScreen(
                     "endTime" to updatedEvent.endTime,
                     "startAtMillis" to updatedEvent.startAtMillis,
                     "endAtMillis" to updatedEvent.endAtMillis,
+                    "imageUrl" to updatedEvent.imageUrl,
                     "visibility" to updatedEvent.visibility,
                 ),
             ).addOnSuccessListener {
@@ -287,6 +304,7 @@ fun EventProfileScreen(
                 endTime = updatedEvent.endTime
                 startAtMillis = updatedEvent.startAtMillis
                 endAtMillis = updatedEvent.endAtMillis
+                imageUrl = updatedEvent.imageUrl
                 visibility = updatedEvent.visibility
                 showEditEventScreen = false
                 statusMessage = "Event updated."
@@ -354,6 +372,86 @@ fun EventProfileScreen(
             }
     }
 
+    fun removeAttendee(attendeeId: String) {
+        if (!canManageLoadedEvent() || attendeeId.isBlank()) return
+
+        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
+
+        db
+            .collection("eventInvites")
+            .whereEqualTo("eventId", eventId)
+            .whereEqualTo("ownerUserId", eventDocumentOwnerUserId)
+            .whereEqualTo("toUserId", attendeeId)
+            .get()
+            .addOnSuccessListener { result ->
+                val batch = db.batch()
+                batch.update(
+                    eventRef,
+                    mapOf(
+                        "attendeeIds" to FieldValue.arrayRemove(attendeeId),
+                        "invitedUserIds" to FieldValue.arrayRemove(attendeeId),
+                    ),
+                )
+                result.documents.forEach { inviteDoc ->
+                    batch.update(
+                        inviteDoc.reference,
+                        mapOf(
+                            "status" to "removed",
+                            "updatedAt" to System.currentTimeMillis(),
+                        ),
+                    )
+                }
+                batch.commit().addOnSuccessListener {
+                    attendeeIds = attendeeIds.filterNot { it == attendeeId }
+                    invitedUserIds = invitedUserIds.filterNot { it == attendeeId }
+                    statusMessage = "Attendee removed."
+                }
+            }.addOnFailureListener { error ->
+                statusMessage = error.message ?: "Could not remove attendee."
+            }
+    }
+
+    fun blockUserFromEvent(blockedUserId: String) {
+        if (!canManageLoadedEvent() || blockedUserId.isBlank()) return
+
+        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
+
+        db
+            .collection("eventInvites")
+            .whereEqualTo("eventId", eventId)
+            .whereEqualTo("ownerUserId", eventDocumentOwnerUserId)
+            .whereEqualTo("toUserId", blockedUserId)
+            .get()
+            .addOnSuccessListener { result ->
+                val batch = db.batch()
+                batch.update(
+                    eventRef,
+                    mapOf(
+                        "blockedUserIds" to FieldValue.arrayUnion(blockedUserId),
+                        "attendeeIds" to FieldValue.arrayRemove(blockedUserId),
+                        "invitedUserIds" to FieldValue.arrayRemove(blockedUserId),
+                    ),
+                )
+                result.documents.forEach { inviteDoc ->
+                    batch.update(
+                        inviteDoc.reference,
+                        mapOf(
+                            "status" to "blocked",
+                            "updatedAt" to System.currentTimeMillis(),
+                        ),
+                    )
+                }
+                batch.commit().addOnSuccessListener {
+                    blockedUserIds = (blockedUserIds + blockedUserId).distinct()
+                    attendeeIds = attendeeIds.filterNot { it == blockedUserId }
+                    invitedUserIds = invitedUserIds.filterNot { it == blockedUserId }
+                    statusMessage = "User blocked from this event."
+                }
+            }.addOnFailureListener { error ->
+                statusMessage = error.message ?: "Could not block user from event."
+            }
+    }
+
     if (showInviteDialog) {
         AlertDialog(
             onDismissRequest = { showInviteDialog = false },
@@ -362,12 +460,22 @@ fun EventProfileScreen(
                 Column {
                     friendProfiles.forEach { friend ->
                         val alreadyInvited = invitedUserIds.contains(friend.id)
+                        val isAttending = attendeeIds.contains(friend.id)
+                        val isBlockedFromEvent = blockedUserIds.contains(friend.id)
 
                         OutlinedButton(
                             onClick = { inviteUser(friend) },
-                            enabled = !alreadyInvited,
+                            enabled = !alreadyInvited && !isAttending && !isBlockedFromEvent,
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(if (alreadyInvited) "${friend.name} invited" else friend.name)
+                            Text(
+                                when {
+                                    isBlockedFromEvent -> "${friend.name} blocked"
+                                    isAttending -> "${friend.name} attending"
+                                    alreadyInvited -> "${friend.name} invited"
+                                    else -> friend.name
+                                },
+                            )
                         }
                     }
                 }
@@ -447,6 +555,8 @@ fun EventProfileScreen(
             startAtMillis = startAtMillis,
             endAtMillis = endAtMillis,
             attendeeIds = attendeeIds,
+            blockedUserIds = blockedUserIds,
+            imageUrl = imageUrl,
         )
 
     if (!canViewEvent(currentEvent, currentUserId, currentUserFriendIds.orEmpty())) {
@@ -464,6 +574,7 @@ fun EventProfileScreen(
                     description = description,
                     location = location,
                     groupId = groupId,
+                    imageUrl = imageUrl,
                 ),
             saveButtonText = "Save Changes",
             onSave = { updateEvent(it) },
@@ -481,6 +592,7 @@ fun EventProfileScreen(
     ) {
         ProfileHeader(
             title = title.ifBlank { "Untitled Event" },
+            imageUrl = imageUrl,
             placeholderIcon = Icons.Default.Info,
             subtitle = {
                 Text(
@@ -505,24 +617,64 @@ fun EventProfileScreen(
 
         Text("${attendeeIds.size} attending")
 
-        TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
-            Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
+        if (attendeeIds.isEmpty()) {
+            Text("No attendees yet.", color = MaterialTheme.colorScheme.secondary)
+        } else {
+            TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
+                Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
+            }
         }
 
-        if (attendeesExpanded) {
+        if (attendeesExpanded && attendeeIds.isNotEmpty()) {
             val attendeeById = attendeeProfiles.associateBy { it.id }
 
             attendeeIds.forEach { attendeeId ->
                 val attendee = attendeeById[attendeeId]
-                UserLinkRow(
-                    label =
-                        attendee
-                            ?.name
-                            ?.ifBlank { attendee.email }
-                            ?.ifBlank { attendeeId }
-                            ?: attendeeId,
-                    onClick = { onOpenUserProfile(attendeeId) },
-                )
+                val attendeeName =
+                    attendee
+                        ?.name
+                        ?.ifBlank { attendee.email }
+                        ?.ifBlank { attendeeId }
+                        ?: attendeeId
+
+                val canManageAttendee =
+                    canManageEvent &&
+                        attendeeId != currentUserId &&
+                        attendeeId != ownerUserId &&
+                        attendeeId != createdByUserId
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { onOpenUserProfile(attendeeId) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(attendeeName)
+                    }
+
+                    if (canManageAttendee) {
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        UserActionMenuButton(
+                            actions =
+                                listOf(
+                                    UserActionMenuItem(
+                                        label = "Remove Attendee",
+                                        onClick = { removeAttendee(attendeeId) },
+                                    ),
+                                    UserActionMenuItem(
+                                        label = "Block from Event",
+                                        onClick = { blockUserFromEvent(attendeeId) },
+                                        destructive = true,
+                                    ),
+                                ),
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
 

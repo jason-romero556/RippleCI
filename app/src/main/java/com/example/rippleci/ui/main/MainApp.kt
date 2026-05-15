@@ -374,11 +374,12 @@ fun MainApp(
 
                 is AppRoute.Events -> {
                     EventsScreen(
-                        onOpenEventProfile = { ownerUserId, eventId ->
+                        onOpenEventProfile = { ownerUserId, eventId, groupId ->
                             navigateTo(
                                 AppRoute.EventProfile(
-                                    eventId,
-                                    ownerUserId,
+                                    eventId = eventId,
+                                    ownerUserId = ownerUserId,
+                                    groupId = groupId,
                                 ),
                             )
                         },
@@ -418,20 +419,25 @@ fun MainApp(
                                     profileTitlesByUserId = profileTitlesByUserId + (loadedUserId to loadedName)
                                 }
                             },
+                            onOpenConversation = { conversationId, conversationName ->
+                                navigateTo(AppRoute.Conversation(conversationId, conversationName))
+                            },
                             onOpenUserProfile = { userId, displayName ->
                                 navigateToUserProfile(userId, displayName)
                             },
                             onOpenClubProfile = { clubId ->
                                 navigateTo(AppRoute.ClubProfile(clubId))
                             },
-                            onOpenEventProfile = { eventId ->
+                            onOpenEventProfile = { eventId, eventOwnerUserId, eventGroupId ->
                                 navigateTo(
                                     AppRoute.EventProfile(
                                         eventId = eventId,
-                                        ownerUserId = profileRoute.userId,
+                                        ownerUserId = eventOwnerUserId,
+                                        groupId = eventGroupId,
                                     ),
                                 )
                             },
+                            messagesViewModel = messagesViewModel,
                         )
                     }
                 }

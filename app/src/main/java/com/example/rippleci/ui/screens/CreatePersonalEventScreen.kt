@@ -1,7 +1,10 @@
 package com.example.rippleci.ui.screens
 
 import android.os.Build
+import android.net.Uri
 import android.widget.NumberPicker
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,16 +38,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.ui.components.EventVisibilityOptions
+import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.VisibilitySelector
+import com.example.rippleci.ui.components.createImageCaptureUri
+import com.google.firebase.Firebase
+import com.google.firebase.storage.storage
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +63,19 @@ fun CreatePersonalEventScreen(
     onSave: (PersonalEvent) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val storage = Firebase.storage
+    val imageStorageKey =
+        remember(initialEvent?.id) {
+            initialEvent?.id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        }
+
     var title by remember(initialEvent?.id) { mutableStateOf(initialEvent?.title.orEmpty()) }
     var description by remember(initialEvent?.id) { mutableStateOf(initialEvent?.description.orEmpty()) }
     var location by remember(initialEvent?.id) { mutableStateOf(initialEvent?.location.orEmpty()) }
+    var imageUrl by remember(initialEvent?.id) { mutableStateOf(initialEvent?.imageUrl.orEmpty()) }
+    var isUploadingImage by remember { mutableStateOf(false) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var selectedDateMillis by remember(initialEvent?.id) {
         mutableStateOf(initialEvent?.startAtMillis?.takeIf { it > 0L }?.let(::localDateStartMillis))
     }
@@ -82,6 +101,45 @@ fun CreatePersonalEventScreen(
             selectedDateMillis != null &&
             selectedStartMinutes != null &&
             selectedEndMinutes != null
+
+    fun uploadEventImage(uri: Uri) {
+        isUploadingImage = true
+        statusMessage = ""
+
+        val storageRef =
+            storage.reference.child("event_images/$imageStorageKey/${System.currentTimeMillis()}.jpg")
+
+        storageRef
+            .putFile(uri)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    imageUrl = downloadUrl.toString()
+                    isUploadingImage = false
+                }
+            }.addOnFailureListener { error ->
+                isUploadingImage = false
+                statusMessage = "Image upload failed: ${error.message}"
+            }
+    }
+
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let(::uploadEventImage)
+        }
+
+    val cameraLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture(),
+        ) { didCapture ->
+            val uri = pendingCameraUri
+            if (didCapture && uri != null) {
+                uploadEventImage(uri)
+            } else {
+                statusMessage = "No photo captured."
+            }
+        }
 
     if (showDateDialog) {
         val colorScheme = MaterialTheme.colorScheme
@@ -219,6 +277,20 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        ImageUploadControls(
+            imageUrl = imageUrl,
+            isUploading = isUploadingImage,
+            onChooseFromLibrary = { imagePickerLauncher.launch("image/*") },
+            onUseCamera = {
+                val uri = createImageCaptureUri(context, "event_images")
+                pendingCameraUri = uri
+                cameraLauncher.launch(uri)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedButton(
             onClick = { showDateDialog = true },
             modifier = Modifier.fillMaxWidth(),
@@ -262,6 +334,11 @@ fun CreatePersonalEventScreen(
 
         Button(
             onClick = {
+                if (isUploadingImage) {
+                    statusMessage = "Wait for the image upload to finish."
+                    return@Button
+                }
+
                 val startMillis = startAtMillis
                 val endMillis = endAtMillis
                 val nowMillis = System.currentTimeMillis()
@@ -297,13 +374,15 @@ fun CreatePersonalEventScreen(
                                 createdByUserId = initialEvent?.createdByUserId.orEmpty(),
                                 attendeeIds = initialEvent?.attendeeIds.orEmpty(),
                                 invitedUserIds = initialEvent?.invitedUserIds.orEmpty(),
+                                blockedUserIds = initialEvent?.blockedUserIds.orEmpty(),
+                                imageUrl = imageUrl.trim(),
                             ),
                         )
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = canAttemptSave,
+            enabled = canAttemptSave && !isUploadingImage,
         ) {
             Text(saveButtonText)
         }

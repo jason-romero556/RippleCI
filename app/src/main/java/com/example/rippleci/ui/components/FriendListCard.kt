@@ -1,6 +1,5 @@
 package com.example.rippleci.ui.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -18,7 +17,14 @@ import com.example.rippleci.data.models.UserProfile
 @Composable
 fun FriendListCard(
     user: UserProfile,
+    isFriend: Boolean = true,
+    isPending: Boolean = false,
+    hasBlockedUser: Boolean = false,
     onViewProfile: (() -> Unit)? = null,
+    onAddFriend: () -> Unit = {},
+    onRemoveFriend: () -> Unit = {},
+    onBlockUser: () -> Unit = {},
+    onUnblockUser: () -> Unit = {},
 ) {
     val clubsText = user.clubIds.joinToString(", ").ifBlank { "No clubs listed" }
 
@@ -30,7 +36,6 @@ fun FriendListCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable { onViewProfile?.invoke() }
                     .padding(16.dp),
         ) {
             Row(
@@ -83,6 +88,19 @@ fun FriendListCard(
                         color = MaterialTheme.colorScheme.secondary,
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                FriendshipStatusMenuButton(
+                    isFriend = isFriend,
+                    isPending = isPending,
+                    hasBlockedUser = hasBlockedUser,
+                    onAddFriend = onAddFriend,
+                    onRemoveFriend = onRemoveFriend,
+                    onBlockUser = onBlockUser,
+                    onUnblockUser = onUnblockUser,
+                    compact = true,
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))

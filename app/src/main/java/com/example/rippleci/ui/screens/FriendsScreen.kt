@@ -1,5 +1,8 @@
 package com.example.rippleci.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.example.rippleci.data.CsuciClassYears
@@ -18,6 +22,7 @@ import com.example.rippleci.data.CsuciMajors
 import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
@@ -26,13 +31,16 @@ import com.example.rippleci.data.toUserGroupInvite
 import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.GroupVisibilityOptions
+import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.StudentCard
 import com.example.rippleci.ui.components.VisibilitySelector
+import com.example.rippleci.ui.components.createImageCaptureUri
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.storage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +54,9 @@ fun FriendsScreen(
     messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
+    val storage = Firebase.storage
     val auth = Firebase.auth
+    val context = LocalContext.current
     val currentUserId = auth.currentUser?.uid ?: ""
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -72,10 +82,51 @@ fun FriendsScreen(
     var showCreateGroupDialog by remember { mutableStateOf(false) }
     var groupName by remember { mutableStateOf("") }
     var groupDescription by remember { mutableStateOf("") }
+    var groupProfilePictureUrl by remember { mutableStateOf("") }
+    var isUploadingGroupImage by remember { mutableStateOf(false) }
+    var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var groupVisibility by remember { mutableStateOf("public") }
     var blockedUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var blockedByUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val hiddenUserIds = blockedUserIds + blockedByUserIds
+
+    fun uploadNewGroupImage(uri: Uri) {
+        val uid = currentUserId
+        if (uid.isBlank()) return
+
+        isUploadingGroupImage = true
+
+        val storageRef =
+            storage.reference.child("group_pictures/drafts/$uid/${System.currentTimeMillis()}.jpg")
+
+        storageRef
+            .putFile(uri)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    groupProfilePictureUrl = downloadUrl.toString()
+                    isUploadingGroupImage = false
+                }
+            }.addOnFailureListener {
+                isUploadingGroupImage = false
+            }
+    }
+
+    val newGroupImagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let(::uploadNewGroupImage)
+        }
+
+    val newGroupCameraLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture(),
+        ) { didCapture ->
+            val uri = pendingGroupCameraUri
+            if (didCapture && uri != null) {
+                uploadNewGroupImage(uri)
+            }
+        }
 
     LaunchedEffect(requestedSelectedTab) {
         requestedSelectedTab?.let { tabIndex ->
@@ -265,12 +316,14 @@ fun FriendsScreen(
     fun createGroup() {
         val uid = currentUserId
         if (uid.isBlank() || groupName.isBlank()) return
+        if (isUploadingGroupImage) return
         db
             .collection("userGroups")
             .add(
                 mapOf(
                     "name" to groupName.trim(),
                     "description" to groupDescription.trim(),
+                    "profilePictureUrl" to groupProfilePictureUrl.trim(),
                     "ownerUserId" to uid,
                     "memberIds" to listOf(uid),
                     "adminIds" to listOf(uid),
@@ -280,6 +333,7 @@ fun FriendsScreen(
             ).addOnSuccessListener {
                 groupName = ""
                 groupDescription = ""
+                groupProfilePictureUrl = ""
                 groupVisibility = "public"
                 showCreateGroupDialog = false
             }
@@ -326,6 +380,115 @@ fun FriendsScreen(
             }.addOnFailureListener { isSearching = false }
     }
 
+    fun sendFriendRequest(user: UserProfile) {
+        val uid = currentUserId
+        if (uid.isBlank() || user.id.isBlank()) return
+
+        val request =
+            hashMapOf(
+                "fromUserId" to uid,
+                "fromUserName" to
+                    firstNameFromCandidates(
+                        currentUserName,
+                        auth.currentUser?.displayName,
+                    ),
+                "toUserId" to user.id,
+                "status" to "pending",
+                "timestamp" to System.currentTimeMillis(),
+            )
+
+        db.collection("friendRequests").add(request)
+    }
+
+    fun removeFriend(userIdToRemove: String) {
+        val uid = currentUserId
+        if (uid.isBlank() || userIdToRemove.isBlank()) return
+
+        db
+            .collection("users")
+            .document(uid)
+            .update("friends", FieldValue.arrayRemove(userIdToRemove))
+        db
+            .collection("users")
+            .document(userIdToRemove)
+            .update("friends", FieldValue.arrayRemove(uid))
+
+        val conversationId = listOf(uid, userIdToRemove).sorted().joinToString("_")
+        val convRef = db.collection("conversations").document(conversationId)
+        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
+            val batch = db.batch()
+            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
+            batch.commit().addOnSuccessListener { convRef.delete() }
+        }
+    }
+
+    fun blockUser(user: UserProfile) {
+        val uid = currentUserId
+        if (uid.isBlank() || user.id.isBlank()) return
+
+        val outgoingRequests =
+            db
+                .collection("friendRequests")
+                .whereEqualTo("fromUserId", uid)
+                .whereEqualTo("toUserId", user.id)
+
+        val incomingRequests =
+            db
+                .collection("friendRequests")
+                .whereEqualTo("fromUserId", user.id)
+                .whereEqualTo("toUserId", uid)
+
+        outgoingRequests
+            .get()
+            .addOnSuccessListener { outgoing ->
+                incomingRequests
+                    .get()
+                    .addOnSuccessListener { incoming ->
+                        val batch = db.batch()
+                        val blockRef =
+                            db
+                                .collection("blockedUsers")
+                                .document(blockDocumentId(uid, user.id))
+
+                        batch.set(
+                            blockRef,
+                            mapOf(
+                                "blockerUserId" to uid,
+                                "blockedUserId" to user.id,
+                                "blockedUserName" to user.name,
+                                "createdAt" to System.currentTimeMillis(),
+                            ),
+                        )
+                        batch.update(db.collection("users").document(uid), "friends", FieldValue.arrayRemove(user.id))
+                        batch.update(db.collection("users").document(user.id), "friends", FieldValue.arrayRemove(uid))
+                        (outgoing.documents + incoming.documents).forEach { requestDoc ->
+                            batch.delete(requestDoc.reference)
+                        }
+
+                        batch.commit().addOnSuccessListener {
+                            blockedUserIds = blockedUserIds + user.id
+                            friendIds = friendIds.filterNot { it == user.id }
+                            friendProfiles = friendProfiles.filterNot { it.id == user.id }
+                            searchResults = searchResults.filterNot { it.id == user.id }
+                            pendingRequestIds = pendingRequestIds.filterNot { it == user.id }
+                        }
+                    }
+            }
+    }
+
+    fun unblockUser(userIdToUnblock: String) {
+        val uid = currentUserId
+        if (uid.isBlank() || userIdToUnblock.isBlank()) return
+
+        db
+            .collection("blockedUsers")
+            .document(blockDocumentId(uid, userIdToUnblock))
+            .delete()
+            .addOnSuccessListener {
+                blockedUserIds = blockedUserIds - userIdToUnblock
+            }
+    }
+
     if (showCreateGroupDialog) {
         AlertDialog(
             onDismissRequest = { showCreateGroupDialog = false },
@@ -346,6 +509,18 @@ fun FriendsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(12.dp))
+                    ImageUploadControls(
+                        imageUrl = groupProfilePictureUrl,
+                        isUploading = isUploadingGroupImage,
+                        onChooseFromLibrary = { newGroupImagePickerLauncher.launch("image/*") },
+                        onUseCamera = {
+                            val uri = createImageCaptureUri(context, "group_images")
+                            pendingGroupCameraUri = uri
+                            newGroupCameraLauncher.launch(uri)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     VisibilitySelector(
                         title = "Group Visibility",
                         selectedValue = groupVisibility,
@@ -355,7 +530,7 @@ fun FriendsScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = { createGroup() }, enabled = groupName.isNotBlank()) {
+                Button(onClick = { createGroup() }, enabled = groupName.isNotBlank() && !isUploadingGroupImage) {
                     Text("Create")
                 }
             },
@@ -425,27 +600,10 @@ fun FriendsScreen(
                                     onViewProfile = {
                                         onOpenUserProfile(user.id, user.name.ifBlank { user.email })
                                     },
-                                    onAddFriend = {},
-                                    onRemoveFriend = {
-                                        val uid = currentUserId
-                                        // Remove from both users' friend lists
-                                        db
-                                            .collection("users")
-                                            .document(uid)
-                                            .update("friends", FieldValue.arrayRemove(user.id))
-                                        db
-                                            .collection("users")
-                                            .document(user.id)
-                                            .update("friends", FieldValue.arrayRemove(uid))
-                                        // Delete DM conversation and all messages
-                                        val conversationId = listOf(uid, user.id).sorted().joinToString("_")
-                                        val convRef = db.collection("conversations").document(conversationId)
-                                        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
-                                            val batch = db.batch()
-                                            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
-                                            batch.commit().addOnSuccessListener { convRef.delete() }
-                                        }
-                                    },
+                                    onAddFriend = { sendFriendRequest(user) },
+                                    onRemoveFriend = { removeFriend(user.id) },
+                                    onBlockUser = { blockUser(user) },
+                                    onUnblockUser = { unblockUser(user.id) },
                                     onMessage = {
                                         val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
                                         messagesViewModel.getOrCreateDMConversation(
@@ -742,6 +900,8 @@ fun FriendsScreen(
                         } else {
                             visibleSearchResults.forEach { user ->
                                 val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
+                                val canMessageUser =
+                                    friendIds.contains(user.id) || user.messagePrivacy == MESSAGE_PRIVACY_EVERYONE
                                 StudentCard(
                                     user = user,
                                     isFriend = friendIds.contains(user.id),
@@ -749,46 +909,21 @@ fun FriendsScreen(
                                     onViewProfile = {
                                         onOpenUserProfile(user.id, user.name.ifBlank { user.email })
                                     },
-                                    onAddFriend = {
-                                        val uid = currentUserId
-                                        val request =
-                                            hashMapOf(
-                                                "fromUserId" to uid,
-                                                "fromUserName" to
-                                                    firstNameFromCandidates(
-                                                        currentUserName,
-                                                        auth.currentUser?.displayName,
-                                                    ),
-                                                "toUserId" to user.id,
-                                                "status" to "pending",
-                                                "timestamp" to System.currentTimeMillis(),
-                                            )
-                                        db.collection("friendRequests").add(request)
-                                    },
-                                    onRemoveFriend = {
-                                        val uid = currentUserId
-                                        db
-                                            .collection("users")
-                                            .document(uid)
-                                            .update("friends", FieldValue.arrayRemove(user.id))
-                                        db
-                                            .collection("users")
-                                            .document(user.id)
-                                            .update("friends", FieldValue.arrayRemove(uid))
-                                        val conversationId = listOf(uid, user.id).sorted().joinToString("_")
-                                        val convRef = db.collection("conversations").document(conversationId)
-                                        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
-                                            val batch = db.batch()
-                                            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
-                                            batch.commit().addOnSuccessListener { convRef.delete() }
-                                        }
-                                    },
-                                    onMessage = {
-                                        messagesViewModel.getOrCreateDMConversation(
-                                            otherUserId = user.id,
-                                            otherUserName = friendName,
-                                        ) { convId -> onOpenConversation(convId, friendName) }
-                                    },
+                                    onAddFriend = { sendFriendRequest(user) },
+                                    onRemoveFriend = { removeFriend(user.id) },
+                                    onBlockUser = { blockUser(user) },
+                                    onUnblockUser = { unblockUser(user.id) },
+                                    onMessage =
+                                        if (canMessageUser) {
+                                            {
+                                                messagesViewModel.getOrCreateDMConversation(
+                                                    otherUserId = user.id,
+                                                    otherUserName = friendName,
+                                                ) { convId -> onOpenConversation(convId, friendName) }
+                                            }
+                                        } else {
+                                            null
+                                        },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -799,3 +934,8 @@ fun FriendsScreen(
         }
     }
 }
+
+private fun blockDocumentId(
+    blockerUserId: String,
+    blockedUserId: String,
+): String = "${blockerUserId}_$blockedUserId"

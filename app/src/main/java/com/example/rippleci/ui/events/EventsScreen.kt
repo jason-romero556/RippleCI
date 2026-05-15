@@ -37,7 +37,7 @@ import com.google.firebase.firestore.firestore
 fun EventsScreen(
     modifier: Modifier = Modifier,
     viewModel: EventsViewModel = viewModel(),
-    onOpenEventProfile: (String, String) -> Unit = { _, _ -> },
+    onOpenEventProfile: (String, String, String) -> Unit = { _, _, _ -> },
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -102,18 +102,29 @@ fun EventsScreen(
                     val invites = snapshot?.documents?.map { it.toEventInvite() } ?: emptyList()
 
                     invites.forEach { invite ->
-                        db
-                            .collection("users")
-                            .document(invite.ownerUserId)
-                            .collection("personalEvents")
-                            .document(invite.eventId)
-                            .get()
+                        val eventRef =
+                            if (invite.groupId.isNotBlank()) {
+                                db
+                                    .collection("userGroups")
+                                    .document(invite.groupId)
+                                    .collection("events")
+                                    .document(invite.eventId)
+                            } else {
+                                db
+                                    .collection("users")
+                                    .document(invite.ownerUserId)
+                                    .collection("personalEvents")
+                                    .document(invite.eventId)
+                            }
+
+                        eventRef.get()
                             .addOnSuccessListener { eventDoc ->
                                 if (eventDoc.exists()) {
                                     val event =
                                         eventDoc.toPersonalEvent().copy(
                                             id = eventDoc.id,
                                             ownerUserId = invite.ownerUserId,
+                                            groupId = invite.groupId,
                                         )
 
                                     attendingEvents =
@@ -131,11 +142,19 @@ fun EventsScreen(
 
         val inviteRef = db.collection("eventInvites").document(invite.id)
         val eventRef =
-            db
-                .collection("users")
-                .document(invite.ownerUserId)
-                .collection("personalEvents")
-                .document(invite.eventId)
+            if (invite.groupId.isNotBlank()) {
+                db
+                    .collection("userGroups")
+                    .document(invite.groupId)
+                    .collection("events")
+                    .document(invite.eventId)
+            } else {
+                db
+                    .collection("users")
+                    .document(invite.ownerUserId)
+                    .collection("personalEvents")
+                    .document(invite.eventId)
+            }
 
         val batch = db.batch()
         batch.update(inviteRef, "status", "accepted")
@@ -149,11 +168,19 @@ fun EventsScreen(
 
         val inviteRef = db.collection("eventInvites").document(invite.id)
         val eventRef =
-            db
-                .collection("users")
-                .document(invite.ownerUserId)
-                .collection("personalEvents")
-                .document(invite.eventId)
+            if (invite.groupId.isNotBlank()) {
+                db
+                    .collection("userGroups")
+                    .document(invite.groupId)
+                    .collection("events")
+                    .document(invite.eventId)
+            } else {
+                db
+                    .collection("users")
+                    .document(invite.ownerUserId)
+                    .collection("personalEvents")
+                    .document(invite.eventId)
+            }
 
         val batch = db.batch()
         batch.update(inviteRef, "status", "declined")
@@ -178,6 +205,8 @@ fun EventsScreen(
                             "ownerUserId" to uid,
                             "attendeeIds" to listOf(uid),
                             "invitedUserIds" to emptyList<String>(),
+                            "blockedUserIds" to emptyList<String>(),
+                            "imageUrl" to newEvent.imageUrl,
                             "visibility" to newEvent.visibility,
                         )
 
@@ -215,184 +244,212 @@ fun EventsScreen(
                 .filter { it.isPastEvent(nowMillis) }
                 .sortedByDescending { it.eventSortMillis() }
 
-        Column(modifier = modifier.fillMaxSize()) {
-            Text(
-                text = "Upcoming Events",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                modifier =
-                    Modifier.padding(
-                        start = helpfulLinksMenuTitleStartPadding,
-                        top = 16.dp,
-                        end = 16.dp,
-                        bottom = 16.dp,
-                    ),
-            )
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp),
+        ) {
+            item {
+                Text(
+                    text = "Upcoming Events",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier =
+                        Modifier.padding(
+                            start = helpfulLinksMenuTitleStartPadding,
+                            top = 16.dp,
+                            end = 16.dp,
+                            bottom = 16.dp,
+                        ),
+                )
+            }
 
-            CollapsibleSection(
-                title = "Event Invites (${pendingInvites.size})",
-                expanded = isInvitesExpanded,
-                onToggle = { isInvitesExpanded = !isInvitesExpanded },
-            ) {
+            item {
                 if (pendingInvites.isEmpty()) {
-                    Text("No pending event invites.")
+                    Text("No pending event invites.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    pendingInvites.forEach { invite ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(invite.eventTitle.ifBlank { "Untitled Event" })
+                    CollapsibleSection(
+                        title = "Event Invites (${pendingInvites.size})",
+                        expanded = isInvitesExpanded,
+                        onToggle = { isInvitesExpanded = !isInvitesExpanded },
+                    ) {
+                        pendingInvites.forEach { invite ->
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(invite.eventTitle.ifBlank { "Untitled Event" })
 
-                                Row {
-                                    Button(onClick = { acceptInvite(invite) }) {
-                                        Text("Accept")
-                                    }
+                                    Row {
+                                        Button(onClick = { acceptInvite(invite) }) {
+                                            Text("Accept")
+                                        }
 
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
 
-                                    OutlinedButton(onClick = { declineInvite(invite) }) {
-                                        Text("Decline")
+                                        OutlinedButton(onClick = { declineInvite(invite) }) {
+                                            Text("Decline")
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
 
-            CollapsibleSection(
-                title = "My Events (${upcomingPersonalEvents.size})",
-                expanded = isPersonalExpanded,
-                onToggle = { isPersonalExpanded = !isPersonalExpanded },
-            ) {
+            item {
                 Button(
                     onClick = { isCreatingEvent = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 ) {
                     Text("Add Event")
                 }
+            }
 
+            item {
                 Spacer(modifier = Modifier.height(8.dp))
+            }
 
+            item {
                 if (upcomingPersonalEvents.isEmpty()) {
-                    Text("No upcoming personal events.")
+                    Text("No upcoming personal events.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    upcomingPersonalEvents.forEach { event ->
-                        PersonalEventCard(
-                            event = event,
-                            onClick = { onOpenEventProfile(userId.orEmpty(), event.id) },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    CollapsibleSection(
+                        title = "My Events (${upcomingPersonalEvents.size})",
+                        expanded = isPersonalExpanded,
+                        onToggle = { isPersonalExpanded = !isPersonalExpanded },
+                    ) {
+                        upcomingPersonalEvents.forEach { event ->
+                            PersonalEventCard(
+                                event = event,
+                                onClick = { onOpenEventProfile(userId.orEmpty(), event.id, "") },
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
 
-            CollapsibleSection(
-                title = "Past My Events (${pastPersonalEvents.size})",
-                expanded = isPastPersonalExpanded,
-                onToggle = { isPastPersonalExpanded = !isPastPersonalExpanded },
-            ) {
+            item {
                 if (pastPersonalEvents.isEmpty()) {
-                    Text("No past personal events.")
+                    Text("No past personal events.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    pastPersonalEvents.forEach { event ->
-                        PersonalEventCard(
-                            event = event,
-                            onClick = { onOpenEventProfile(userId.orEmpty(), event.id) },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    CollapsibleSection(
+                        title = "Past My Events (${pastPersonalEvents.size})",
+                        expanded = isPastPersonalExpanded,
+                        onToggle = { isPastPersonalExpanded = !isPastPersonalExpanded },
+                    ) {
+                        pastPersonalEvents.forEach { event ->
+                            PersonalEventCard(
+                                event = event,
+                                onClick = { onOpenEventProfile(userId.orEmpty(), event.id, "") },
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
 
-            CollapsibleSection(
-                title = "Events I'm Attending (${upcomingAttendingEvents.size})",
-                expanded = isAttendingExpanded,
-                onToggle = { isAttendingExpanded = !isAttendingExpanded },
-            ) {
+            item {
                 if (upcomingAttendingEvents.isEmpty()) {
-                    Text("No upcoming accepted event invites.")
+                    Text("No upcoming accepted event invites.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    upcomingAttendingEvents.forEach { event ->
-                        PersonalEventCard(
-                            event = event,
-                            onClick = { onOpenEventProfile(event.ownerUserId, event.id) },
-                        )
+                    CollapsibleSection(
+                        title = "Events I'm Attending (${upcomingAttendingEvents.size})",
+                        expanded = isAttendingExpanded,
+                        onToggle = { isAttendingExpanded = !isAttendingExpanded },
+                    ) {
+                        upcomingAttendingEvents.forEach { event ->
+                            PersonalEventCard(
+                                event = event,
+                                onClick = { onOpenEventProfile(event.ownerUserId, event.id, event.groupId) },
+                            )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
 
-            CollapsibleSection(
-                title = "Past Events I Attended (${pastAttendingEvents.size})",
-                expanded = isPastAttendingExpanded,
-                onToggle = { isPastAttendingExpanded = !isPastAttendingExpanded },
-            ) {
+            item {
                 if (pastAttendingEvents.isEmpty()) {
-                    Text("No past attended events.")
+                    Text("No past attended events.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    pastAttendingEvents.forEach { event ->
-                        PersonalEventCard(
-                            event = event,
-                            onClick = { onOpenEventProfile(event.ownerUserId, event.id) },
-                        )
+                    CollapsibleSection(
+                        title = "Past Events I Attended (${pastAttendingEvents.size})",
+                        expanded = isPastAttendingExpanded,
+                        onToggle = { isPastAttendingExpanded = !isPastAttendingExpanded },
+                    ) {
+                        pastAttendingEvents.forEach { event ->
+                            PersonalEventCard(
+                                event = event,
+                                onClick = { onOpenEventProfile(event.ownerUserId, event.id, event.groupId) },
+                            )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }
 
-            CollapsibleSection(
-                title = "School Events",
-                expanded = isSchoolExpanded,
-                onToggle = { isSchoolExpanded = !isSchoolExpanded },
-            ) {
+            item {
                 when (val state = uiState) {
-                    is EventsUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-
-                    is EventsUiState.Error -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Error: ${state.message}",
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(onClick = { viewModel.fetchEvents() }) {
-                                    Text("Retry")
-                                }
-                            }
-                        }
-                    }
-
                     is EventsUiState.Success -> {
                         if (state.events.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(text = "No upcoming events found.")
-                            }
+                            Text(text = "No upcoming events found.", modifier = Modifier.padding(horizontal = 16.dp))
                         } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            CollapsibleSection(
+                                title = "School Events",
+                                expanded = isSchoolExpanded,
+                                onToggle = { isSchoolExpanded = !isSchoolExpanded },
                             ) {
-                                items(state.events) { event ->
-                                    EventCard(event = event)
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    state.events.forEach { event ->
+                                        EventCard(event = event)
+                                    }
                                 }
+                            }
+                        }
+                    }
+
+                    else -> {
+                        CollapsibleSection(
+                            title = "School Events",
+                            expanded = isSchoolExpanded,
+                            onToggle = { isSchoolExpanded = !isSchoolExpanded },
+                        ) {
+                            when (state) {
+                                is EventsUiState.Loading -> {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                }
+
+                                is EventsUiState.Error -> {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "Error: ${state.message}",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Button(onClick = { viewModel.fetchEvents() }) {
+                                                Text("Retry")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                is EventsUiState.Success -> Unit
                             }
                         }
                     }

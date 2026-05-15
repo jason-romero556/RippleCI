@@ -1,16 +1,11 @@
 package com.example.rippleci.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,18 +19,20 @@ fun StudentCard(
     user: UserProfile,
     isFriend: Boolean,
     isPending: Boolean,
+    hasBlockedUser: Boolean = false,
     onViewProfile: (() -> Unit)? = null,
     onAddFriend: () -> Unit,
     onRemoveFriend: () -> Unit,
+    onBlockUser: () -> Unit = {},
+    onUnblockUser: () -> Unit = {},
     onMessage: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val clubsText = user.clubIds.joinToString(", ").ifBlank { "None" }
     val classesText = user.classes.joinToString(", ").ifBlank { "None" }
-    var showRemoveDialog by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -80,25 +77,15 @@ fun StudentCard(
                     }
                 }
 
-                when {
-                    isFriend -> {
-                        OutlinedButton(onClick = { showRemoveDialog = true }) {
-                            Text("Remove")
-                        }
-                    }
-
-                    isPending -> {
-                        OutlinedButton(onClick = {}, enabled = false) {
-                            Text("Pending")
-                        }
-                    }
-
-                    else -> {
-                        Button(onClick = onAddFriend) {
-                            Text("Add")
-                        }
-                    }
-                }
+                FriendshipStatusMenuButton(
+                    isFriend = isFriend,
+                    isPending = isPending,
+                    hasBlockedUser = hasBlockedUser,
+                    onAddFriend = onAddFriend,
+                    onRemoveFriend = onRemoveFriend,
+                    onBlockUser = onBlockUser,
+                    onUnblockUser = onUnblockUser,
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -117,7 +104,7 @@ fun StudentCard(
                 }
             }
 
-            if (isFriend && onMessage != null) {
+            if (onMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onMessage,
@@ -126,34 +113,6 @@ fun StudentCard(
                     Text("Message")
                 }
             }
-        }
-        if (showRemoveDialog) {
-            AlertDialog(
-                onDismissRequest = { showRemoveDialog = false },
-                title = { Text("Remove Friend") },
-                text = {
-                    Text("Are you sure you want to remove ${user.name.ifBlank { "this user" }} as a friend?")
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onRemoveFriend()
-                            showRemoveDialog = false
-                        },
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                            ),
-                    ) {
-                        Text("Remove")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(onClick = { showRemoveDialog = false }) {
-                        Text("Cancel")
-                    }
-                },
-            )
         }
     }
 }

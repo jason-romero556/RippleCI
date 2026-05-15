@@ -8,4 +8,5 @@ data class UserGroupProfile(
     val memberIds: List<String> = emptyList(),
     val adminIds: List<String> = emptyList(),
     val visibility: String = "public",
+    val profilePictureUrl: String = "",
 )
