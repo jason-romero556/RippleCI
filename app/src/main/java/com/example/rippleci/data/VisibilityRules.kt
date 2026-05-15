@@ -28,5 +28,8 @@ fun canViewEvent(
     return canManageEvent ||
         event.visibility == "public" ||
         (event.visibility == "friends" && currentUserFriendIds.contains(event.ownerUserId)) ||
-        (event.visibility == "attendees" && event.attendeeIds.contains(currentUserId))
+        (
+            event.visibility == "attendees" &&
+                (event.attendeeIds.contains(currentUserId) || event.invitedUserIds.contains(currentUserId))
+        )
 }

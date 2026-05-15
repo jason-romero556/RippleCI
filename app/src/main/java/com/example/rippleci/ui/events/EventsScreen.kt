@@ -2,7 +2,6 @@ package com.example.rippleci.ui.events
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,11 +17,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.eventSortMillis
+import com.example.rippleci.data.isPastSchoolEvent
 import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.models.SchoolEvent
+import com.example.rippleci.data.schoolEventSortMillis
+import com.example.rippleci.data.stableSchoolEventId
 import com.example.rippleci.data.toEventInvite
+import com.example.rippleci.data.toFirestoreMap
 import com.example.rippleci.data.toPersonalEvent
+import com.example.rippleci.data.toSchoolEvent
 import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
@@ -45,14 +50,15 @@ fun EventsScreen(
 
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isPersonalExpanded by remember { mutableStateOf(true) }
-    var isPastPersonalExpanded by remember { mutableStateOf(false) }
-    var isSchoolExpanded by remember { mutableStateOf(true) }
+    var isPastEventsExpanded by remember { mutableStateOf(false) }
+    var isSchoolExpanded by remember { mutableStateOf(false) }
     var isCreatingEvent by remember { mutableStateOf(false) }
     var pendingInvites by remember { mutableStateOf<List<EventInvite>>(emptyList()) }
     var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var markedSchoolEvents by remember { mutableStateOf<Map<String, SchoolEvent>>(emptyMap()) }
+    var clearedPastEventKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var isInvitesExpanded by remember { mutableStateOf(true) }
     var isAttendingExpanded by remember { mutableStateOf(true) }
-    var isPastAttendingExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(userId) {
         val uid = userId
@@ -134,7 +140,96 @@ fun EventsScreen(
                             }
                     }
                 }
+
+            db
+                .collection("users")
+                .document(uid)
+                .collection("schoolEventMarks")
+                .addSnapshotListener { snapshot, _ ->
+                    markedSchoolEvents =
+                        snapshot
+                            ?.documents
+                            ?.associate { doc -> doc.id to doc.toSchoolEvent() }
+                            ?: emptyMap()
+                }
+
+            db
+                .collection("users")
+                .document(uid)
+                .collection("clearedPastEvents")
+                .addSnapshotListener { snapshot, _ ->
+                    clearedPastEventKeys =
+                        snapshot
+                            ?.documents
+                            ?.map { it.id }
+                            ?.toSet()
+                            ?: emptySet()
+                }
         }
+    }
+
+    fun toggleSchoolEventAttendance(event: SchoolEvent) {
+        val uid = userId ?: return
+        val eventKey = event.stableSchoolEventId()
+        val markRef =
+            db
+                .collection("users")
+                .document(uid)
+                .collection("schoolEventMarks")
+                .document(eventKey)
+
+        if (markedSchoolEvents.containsKey(eventKey)) {
+            markRef.delete()
+        } else {
+            markRef.set(event.toFirestoreMap())
+        }
+    }
+
+    fun clearPastEvents(
+        pastCustomEvents: List<PersonalEvent>,
+        pastSchoolEvents: List<SchoolEvent>,
+    ) {
+        val uid = userId ?: return
+        val batch = db.batch()
+        val clearedRef =
+            db
+                .collection("users")
+                .document(uid)
+                .collection("clearedPastEvents")
+        val schoolMarksRef =
+            db
+                .collection("users")
+                .document(uid)
+                .collection("schoolEventMarks")
+
+        pastCustomEvents.forEach { event ->
+            val key = pastPersonalEventKey(event)
+            batch.set(
+                clearedRef.document(key),
+                mapOf(
+                    "type" to "custom",
+                    "eventId" to event.id,
+                    "ownerUserId" to event.ownerUserId,
+                    "groupId" to event.groupId,
+                    "clearedAt" to System.currentTimeMillis(),
+                ),
+            )
+        }
+
+        pastSchoolEvents.forEach { event ->
+            val eventKey = event.stableSchoolEventId()
+            batch.delete(schoolMarksRef.document(eventKey))
+            batch.set(
+                clearedRef.document(pastSchoolEventKey(event)),
+                mapOf(
+                    "type" to "school",
+                    "eventId" to eventKey,
+                    "clearedAt" to System.currentTimeMillis(),
+                ),
+            )
+        }
+
+        batch.commit()
     }
 
     fun acceptInvite(invite: EventInvite) {
@@ -205,6 +300,7 @@ fun EventsScreen(
                             "ownerUserId" to uid,
                             "attendeeIds" to listOf(uid),
                             "invitedUserIds" to emptyList<String>(),
+                            "inviteesCanInvite" to newEvent.inviteesCanInvite,
                             "blockedUserIds" to emptyList<String>(),
                             "imageUrl" to newEvent.imageUrl,
                             "visibility" to newEvent.visibility,
@@ -243,6 +339,18 @@ fun EventsScreen(
             attendingEvents
                 .filter { it.isPastEvent(nowMillis) }
                 .sortedByDescending { it.eventSortMillis() }
+        val pastCustomEvents =
+            (pastPersonalEvents + pastAttendingEvents)
+                .distinctBy { event -> "${event.groupId}|${event.ownerUserId}|${event.id}" }
+                .filterNot { event -> clearedPastEventKeys.contains(pastPersonalEventKey(event)) }
+                .sortedByDescending { it.eventSortMillis() }
+        val pastMarkedSchoolEvents =
+            markedSchoolEvents
+                .values
+                .filter { event -> event.isPastSchoolEvent(nowMillis) }
+                .filterNot { event -> clearedPastEventKeys.contains(pastSchoolEventKey(event)) }
+                .sortedByDescending { it.schoolEventSortMillis() }
+        val pastEventsCount = pastCustomEvents.size + pastMarkedSchoolEvents.size
 
         LazyColumn(
             modifier = modifier.fillMaxSize(),
@@ -331,26 +439,6 @@ fun EventsScreen(
             }
 
             item {
-                if (pastPersonalEvents.isEmpty()) {
-                    Text("No past personal events.", modifier = Modifier.padding(horizontal = 16.dp))
-                } else {
-                    CollapsibleSection(
-                        title = "Past My Events (${pastPersonalEvents.size})",
-                        expanded = isPastPersonalExpanded,
-                        onToggle = { isPastPersonalExpanded = !isPastPersonalExpanded },
-                    ) {
-                        pastPersonalEvents.forEach { event ->
-                            PersonalEventCard(
-                                event = event,
-                                onClick = { onOpenEventProfile(userId.orEmpty(), event.id, "") },
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-
-            item {
                 if (upcomingAttendingEvents.isEmpty()) {
                     Text("No upcoming accepted event invites.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
@@ -372,18 +460,43 @@ fun EventsScreen(
             }
 
             item {
-                if (pastAttendingEvents.isEmpty()) {
-                    Text("No past attended events.", modifier = Modifier.padding(horizontal = 16.dp))
+                if (pastEventsCount == 0) {
+                    Text("No past events.", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
                     CollapsibleSection(
-                        title = "Past Events I Attended (${pastAttendingEvents.size})",
-                        expanded = isPastAttendingExpanded,
-                        onToggle = { isPastAttendingExpanded = !isPastAttendingExpanded },
+                        title = "Past Events ($pastEventsCount)",
+                        expanded = isPastEventsExpanded,
+                        onToggle = { isPastEventsExpanded = !isPastEventsExpanded },
                     ) {
-                        pastAttendingEvents.forEach { event ->
+                        OutlinedButton(
+                            onClick = { clearPastEvents(pastCustomEvents, pastMarkedSchoolEvents) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Clear Past Events")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        pastCustomEvents.forEach { event ->
                             PersonalEventCard(
                                 event = event,
-                                onClick = { onOpenEventProfile(event.ownerUserId, event.id, event.groupId) },
+                                onClick = {
+                                    onOpenEventProfile(
+                                        event.ownerUserId.ifBlank { userId.orEmpty() },
+                                        event.id,
+                                        event.groupId,
+                                    )
+                                },
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        pastMarkedSchoolEvents.forEach { event ->
+                            EventCard(
+                                event = event,
+                                isMarkedAttending = true,
+                                onToggleAttendance = { toggleSchoolEventAttendance(event) },
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -395,7 +508,16 @@ fun EventsScreen(
             item {
                 when (val state = uiState) {
                     is EventsUiState.Success -> {
-                        if (state.events.isEmpty()) {
+                        val schoolEvents =
+                            state.events
+                                .filterNot { event -> event.isPastSchoolEvent(nowMillis) }
+                                .sortedWith(
+                                    compareByDescending<SchoolEvent> {
+                                        markedSchoolEvents.containsKey(it.stableSchoolEventId())
+                                    }.thenBy { it.schoolEventSortMillis() },
+                                )
+
+                        if (schoolEvents.isEmpty()) {
                             Text(text = "No upcoming events found.", modifier = Modifier.padding(horizontal = 16.dp))
                         } else {
                             CollapsibleSection(
@@ -407,8 +529,14 @@ fun EventsScreen(
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    state.events.forEach { event ->
-                                        EventCard(event = event)
+                                    schoolEvents.forEach { event ->
+                                        val eventKey = event.stableSchoolEventId()
+
+                                        EventCard(
+                                            event = event,
+                                            isMarkedAttending = markedSchoolEvents.containsKey(eventKey),
+                                            onToggleAttendance = { toggleSchoolEventAttendance(event) },
+                                        )
                                     }
                                 }
                             }
@@ -458,3 +586,9 @@ fun EventsScreen(
         }
     }
 }
+
+private fun pastPersonalEventKey(event: PersonalEvent): String =
+    "custom_${event.ownerUserId}_${event.groupId}_${event.id}".replace("/", "_")
+
+private fun pastSchoolEventKey(event: SchoolEvent): String =
+    "school_${event.stableSchoolEventId()}".replace("/", "_")

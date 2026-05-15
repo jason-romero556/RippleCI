@@ -86,6 +86,8 @@ fun FriendsScreen(
     var isUploadingGroupImage by remember { mutableStateOf(false) }
     var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var groupVisibility by remember { mutableStateOf("public") }
+    var groupMembersCanInvite by remember { mutableStateOf(false) }
+    var groupAdminsCanManageInvites by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var blockedByUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val hiddenUserIds = blockedUserIds + blockedByUserIds
@@ -328,6 +330,8 @@ fun FriendsScreen(
                     "memberIds" to listOf(uid),
                     "adminIds" to listOf(uid),
                     "visibility" to groupVisibility,
+                    "membersCanInvite" to groupMembersCanInvite,
+                    "adminsCanManageInvites" to groupAdminsCanManageInvites,
                     "createdAt" to System.currentTimeMillis(),
                 ),
             ).addOnSuccessListener {
@@ -335,6 +339,8 @@ fun FriendsScreen(
                 groupDescription = ""
                 groupProfilePictureUrl = ""
                 groupVisibility = "public"
+                groupMembersCanInvite = false
+                groupAdminsCanManageInvites = false
                 showCreateGroupDialog = false
             }
     }
@@ -527,6 +533,38 @@ fun FriendsScreen(
                         options = GroupVisibilityOptions,
                         onValueChange = { groupVisibility = it },
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Members can invite friends",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = groupMembersCanInvite,
+                            onCheckedChange = { groupMembersCanInvite = it },
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Admins can manage invites",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = groupAdminsCanManageInvites,
+                            onCheckedChange = { groupAdminsCanManageInvites = it },
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -564,7 +602,17 @@ fun FriendsScreen(
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    text = { Text("Groups (${userGroups.size})") },
+                    text = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Groups (${userGroups.size})")
+                            if (pendingGroupInvites.isNotEmpty()) {
+                                Text(
+                                    "Invites (${pendingGroupInvites.size})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    },
                 )
                 Tab(
                     selected = selectedTab == 3,

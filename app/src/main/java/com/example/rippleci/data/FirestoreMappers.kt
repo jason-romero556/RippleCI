@@ -65,6 +65,7 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
         createdByUserId = getString("createdByUserId").orEmpty(),
         attendeeIds = (get("attendeeIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         invitedUserIds = (get("invitedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        inviteesCanInvite = getBoolean("inviteesCanInvite") ?: false,
         blockedUserIds = (get("blockedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         imageUrl = getString("imageUrl").orEmpty().ifBlank { getString("profilePictureUrl").orEmpty() },
     )
@@ -72,7 +73,8 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
 fun DocumentSnapshot.toSchoolEvent(): SchoolEvent =
     SchoolEvent(
         id = id,
-        title = getString("name").orEmpty(),
+        eventId = getLong("eventId") ?: getLong("eventID") ?: 0L,
+        title = getString("title").orEmpty().ifBlank { getString("name").orEmpty() },
         description = getString("description").orEmpty(),
         location = getString("location").orEmpty(),
         startDateTime = getString("startDateTime").orEmpty(),
@@ -104,6 +106,7 @@ fun DocumentSnapshot.toClubProfile(): ClubProfile =
         memberIds = (get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         officerIds = (get("officerIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         adminIds = (get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+        blockedUserIds = (get("blockedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
     )
 
@@ -128,6 +131,8 @@ fun DocumentSnapshot.toUserGroupProfile(): UserGroupProfile =
         memberIds = (get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         adminIds = (get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         visibility = getString("visibility") ?: "public",
+        membersCanInvite = getBoolean("membersCanInvite") ?: false,
+        adminsCanManageInvites = getBoolean("adminsCanManageInvites") ?: false,
         profilePictureUrl = getString("profilePictureUrl").orEmpty(),
     )
 

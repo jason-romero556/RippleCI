@@ -314,8 +314,8 @@ fun MainApp(
                         when (currentDestination) {
                             AppDestinations.HOME -> {
                                 HomeScreen(
-                                    onOpenEventProfile = { ownerUserId, eventId ->
-                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId))
+                                    onOpenEventProfile = { ownerUserId, eventId, groupId ->
+                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId, groupId))
                                     },
                                     onAddEvent = { navigateTo(AppRoute.Events) },
                                 )

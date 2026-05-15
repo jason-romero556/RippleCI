@@ -93,7 +93,11 @@ fun EventProfileScreen(
     var currentUserFriendIds by remember { mutableStateOf<List<String>?>(null) }
     var attendeeProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var attendeesExpanded by remember { mutableStateOf(false) }
+    var inviteesCanInvite by remember { mutableStateOf(false) }
+    var pendingInviteSettingUpdate by remember { mutableStateOf<PersonalEvent?>(null) }
+    var showDisableOpenInvitesDialog by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf(emptyList<String>()) }
+    var blockedUserProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
 
     val eventRef =
         if (groupId.isNotBlank()) {
@@ -129,6 +133,7 @@ fun EventProfileScreen(
                 endAtMillis = doc.getLong("endAtMillis") ?: 0L
                 clubId = doc.getString("clubId").orEmpty()
                 visibility = doc.getString("visibility") ?: "public"
+                inviteesCanInvite = doc.getBoolean("inviteesCanInvite") ?: false
                 eventLoaded = true
 
                 val loadedOwnerUserId =
@@ -230,8 +235,47 @@ fun EventProfileScreen(
         }
     }
 
+    LaunchedEffect(blockedUserIds) {
+        blockedUserProfiles = emptyList()
+
+        blockedUserIds.chunked(10).forEach { chunk ->
+            db
+                .collection("users")
+                .whereIn(FieldPath.documentId(), chunk)
+                .get()
+                .addOnSuccessListener { result ->
+                    blockedUserProfiles =
+                        (blockedUserProfiles + result.documents.map { it.toUserProfile() })
+                            .distinctBy { it.id }
+                }
+        }
+    }
+
+    fun canManageLoadedEvent(): Boolean {
+        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
+        val canManageGroupEvent =
+            groupId.isNotBlank() &&
+                (currentUserId == groupOwnerUserId || groupAdminIds.contains(currentUserId))
+
+        return currentUserId.isNotBlank() &&
+            (
+                currentUserId == eventDocumentOwnerUserId ||
+                    currentUserId == createdByUserId ||
+                    canManageGroupEvent
+            )
+    }
+
+    fun canInviteToLoadedEvent(): Boolean {
+        if (canManageLoadedEvent()) return true
+
+        return currentUserId.isNotBlank() &&
+            inviteesCanInvite &&
+            !blockedUserIds.contains(currentUserId) &&
+            (attendeeIds.contains(currentUserId) || invitedUserIds.contains(currentUserId))
+    }
+
     fun inviteUser(user: UserProfile) {
-        if (blockedUserIds.contains(user.id)) return
+        if (!canInviteToLoadedEvent() || blockedUserIds.contains(user.id)) return
 
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
         val inviteId = "${eventDocumentOwnerUserId}_${eventId}_${user.id}"
@@ -260,54 +304,117 @@ fun EventProfileScreen(
         batch.update(eventRef, "invitedUserIds", FieldValue.arrayUnion(user.id))
 
         batch.commit().addOnSuccessListener {
-            invitedUserIds = invitedUserIds + user.id
+            invitedUserIds = (invitedUserIds + user.id).distinct()
         }
     }
 
-    fun canManageLoadedEvent(): Boolean {
-        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
-        val canManageGroupEvent =
-            groupId.isNotBlank() &&
-                (currentUserId == groupOwnerUserId || groupAdminIds.contains(currentUserId))
-
-        return currentUserId.isNotBlank() &&
-            (
-                currentUserId == eventDocumentOwnerUserId ||
-                    currentUserId == createdByUserId ||
-                    canManageGroupEvent
-            )
-    }
-
-    fun updateEvent(updatedEvent: PersonalEvent) {
+    fun updateEvent(
+        updatedEvent: PersonalEvent,
+        removePeopleOutsideFriends: Boolean = false,
+    ) {
         if (!canManageLoadedEvent() || eventId.isBlank()) return
 
-        eventRef
-            .update(
-                mapOf(
-                    "title" to updatedEvent.title,
-                    "description" to updatedEvent.description,
-                    "location" to updatedEvent.location,
-                    "date" to updatedEvent.date,
-                    "startTime" to updatedEvent.startTime,
-                    "endTime" to updatedEvent.endTime,
-                    "startAtMillis" to updatedEvent.startAtMillis,
-                    "endAtMillis" to updatedEvent.endAtMillis,
-                    "imageUrl" to updatedEvent.imageUrl,
-                    "visibility" to updatedEvent.visibility,
-                ),
-            ).addOnSuccessListener {
-                title = updatedEvent.title
-                description = updatedEvent.description
-                location = updatedEvent.location
-                date = updatedEvent.date
-                startTime = updatedEvent.startTime
-                endTime = updatedEvent.endTime
-                startAtMillis = updatedEvent.startAtMillis
-                endAtMillis = updatedEvent.endAtMillis
-                imageUrl = updatedEvent.imageUrl
-                visibility = updatedEvent.visibility
-                showEditEventScreen = false
-                statusMessage = "Event updated."
+        val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
+        val allowedUserIds =
+            (
+                currentUserFriendIds.orEmpty() +
+                    currentUserId +
+                    eventDocumentOwnerUserId +
+                    createdByUserId
+            ).filter { it.isNotBlank() }.toSet()
+        val updatedAttendeeIds =
+            if (removePeopleOutsideFriends) {
+                attendeeIds.filter { it in allowedUserIds }
+            } else {
+                attendeeIds
+            }
+        val updatedInvitedUserIds =
+            if (removePeopleOutsideFriends) {
+                invitedUserIds.filter { it in allowedUserIds }
+            } else {
+                invitedUserIds
+            }
+        val removedUserIds =
+            if (removePeopleOutsideFriends) {
+                (attendeeIds + invitedUserIds)
+                    .distinct()
+                    .filterNot { it in allowedUserIds }
+            } else {
+                emptyList()
+            }
+
+        val eventUpdates =
+            mutableMapOf<String, Any>(
+                "title" to updatedEvent.title,
+                "description" to updatedEvent.description,
+                "location" to updatedEvent.location,
+                "date" to updatedEvent.date,
+                "startTime" to updatedEvent.startTime,
+                "endTime" to updatedEvent.endTime,
+                "startAtMillis" to updatedEvent.startAtMillis,
+                "endAtMillis" to updatedEvent.endAtMillis,
+                "imageUrl" to updatedEvent.imageUrl,
+                "visibility" to updatedEvent.visibility,
+                "inviteesCanInvite" to updatedEvent.inviteesCanInvite,
+            )
+
+        if (removePeopleOutsideFriends) {
+            eventUpdates["attendeeIds"] = updatedAttendeeIds
+            eventUpdates["invitedUserIds"] = updatedInvitedUserIds
+        }
+
+        fun applySuccessfulUpdate() {
+            title = updatedEvent.title
+            description = updatedEvent.description
+            location = updatedEvent.location
+            date = updatedEvent.date
+            startTime = updatedEvent.startTime
+            endTime = updatedEvent.endTime
+            startAtMillis = updatedEvent.startAtMillis
+            endAtMillis = updatedEvent.endAtMillis
+            imageUrl = updatedEvent.imageUrl
+            visibility = updatedEvent.visibility
+            inviteesCanInvite = updatedEvent.inviteesCanInvite
+            attendeeIds = updatedAttendeeIds
+            invitedUserIds = updatedInvitedUserIds
+            showEditEventScreen = false
+            statusMessage =
+                if (removePeopleOutsideFriends && removedUserIds.isNotEmpty()) {
+                    "Event updated. Non-friends were removed."
+                } else {
+                    "Event updated."
+                }
+        }
+
+        if (!removePeopleOutsideFriends || removedUserIds.isEmpty()) {
+            eventRef
+                .update(eventUpdates)
+                .addOnSuccessListener { applySuccessfulUpdate() }
+            return
+        }
+
+        db
+            .collection("eventInvites")
+            .whereEqualTo("eventId", eventId)
+            .whereEqualTo("ownerUserId", eventDocumentOwnerUserId)
+            .get()
+            .addOnSuccessListener { result ->
+                val batch = db.batch()
+                batch.update(eventRef, eventUpdates)
+                result.documents
+                    .filter { inviteDoc -> removedUserIds.contains(inviteDoc.getString("toUserId").orEmpty()) }
+                    .forEach { inviteDoc ->
+                        batch.update(
+                            inviteDoc.reference,
+                            mapOf(
+                                "status" to "removed",
+                                "updatedAt" to System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                batch.commit().addOnSuccessListener { applySuccessfulUpdate() }
+            }.addOnFailureListener { error ->
+                statusMessage = error.message ?: "Could not update event."
             }
     }
 
@@ -452,6 +559,20 @@ fun EventProfileScreen(
             }
     }
 
+    fun unblockUserFromEvent(blockedUserId: String) {
+        if (!canManageLoadedEvent() || blockedUserId.isBlank()) return
+
+        eventRef
+            .update("blockedUserIds", FieldValue.arrayRemove(blockedUserId))
+            .addOnSuccessListener {
+                blockedUserIds = blockedUserIds.filterNot { it == blockedUserId }
+                blockedUserProfiles = blockedUserProfiles.filterNot { it.id == blockedUserId }
+                statusMessage = "User unblocked from this event."
+            }.addOnFailureListener { error ->
+                statusMessage = error.message ?: "Could not unblock user from event."
+            }
+    }
+
     if (showInviteDialog) {
         AlertDialog(
             onDismissRequest = { showInviteDialog = false },
@@ -538,6 +659,45 @@ fun EventProfileScreen(
         )
     }
 
+    if (showDisableOpenInvitesDialog) {
+        val pendingUpdate = pendingInviteSettingUpdate
+
+        AlertDialog(
+            onDismissRequest = {
+                showDisableOpenInvitesDialog = false
+                pendingInviteSettingUpdate = null
+            },
+            title = { Text("Disable Open Invites") },
+            text = { Text("Remove attendees and pending invitees who are not in your friends list?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (pendingUpdate != null) {
+                            updateEvent(pendingUpdate, removePeopleOutsideFriends = true)
+                        }
+                        showDisableOpenInvitesDialog = false
+                        pendingInviteSettingUpdate = null
+                    },
+                ) {
+                    Text("Remove Non-Friends")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        if (pendingUpdate != null) {
+                            updateEvent(pendingUpdate, removePeopleOutsideFriends = false)
+                        }
+                        showDisableOpenInvitesDialog = false
+                        pendingInviteSettingUpdate = null
+                    },
+                ) {
+                    Text("Keep Everyone")
+                }
+            },
+        )
+    }
+
     if (!eventLoaded || currentUserFriendIds == null) {
         CircularProgressIndicator()
         return
@@ -546,15 +706,21 @@ fun EventProfileScreen(
     val currentEvent =
         PersonalEvent(
             id = eventId,
+            title = title,
             ownerUserId = ownerUserId.ifBlank { eventOwnerUserId },
+            description = description,
+            location = location,
             createdByUserId = createdByUserId.ifBlank { ownerUserId.ifBlank { eventOwnerUserId } },
             visibility = visibility,
+            groupId = groupId,
             date = date,
             startTime = startTime,
             endTime = endTime,
             startAtMillis = startAtMillis,
             endAtMillis = endAtMillis,
             attendeeIds = attendeeIds,
+            invitedUserIds = invitedUserIds,
+            inviteesCanInvite = inviteesCanInvite,
             blockedUserIds = blockedUserIds,
             imageUrl = imageUrl,
         )
@@ -565,19 +731,25 @@ fun EventProfileScreen(
     }
 
     val canManageEvent = canManageLoadedEvent()
+    val canInviteToEvent = canInviteToLoadedEvent()
 
     if (showEditEventScreen && canManageEvent) {
         CreatePersonalEventScreen(
             initialEvent =
-                currentEvent.copy(
-                    title = title,
-                    description = description,
-                    location = location,
-                    groupId = groupId,
-                    imageUrl = imageUrl,
-                ),
+                currentEvent,
             saveButtonText = "Save Changes",
-            onSave = { updateEvent(it) },
+            onSave = { updatedEvent ->
+                val isCreatorOrOwner =
+                    currentUserId == currentEvent.createdByUserId ||
+                        currentUserId == currentEvent.ownerUserId
+
+                if (isCreatorOrOwner && inviteesCanInvite && !updatedEvent.inviteesCanInvite) {
+                    pendingInviteSettingUpdate = updatedEvent
+                    showDisableOpenInvitesDialog = true
+                } else {
+                    updateEvent(updatedEvent)
+                }
+            },
             onCancel = { showEditEventScreen = false },
         )
         return
@@ -699,6 +871,14 @@ fun EventProfileScreen(
             Text(statusMessage, color = MaterialTheme.colorScheme.secondary)
         }
 
+        if (canInviteToEvent && !currentEvent.isPastEvent()) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(onClick = { showInviteDialog = true }) {
+                Text("Invite Friends")
+            }
+        }
+
         if (canManageEvent) {
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -721,12 +901,47 @@ fun EventProfileScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (!currentEvent.isPastEvent()) {
-                Button(onClick = { showInviteDialog = true }) {
-                    Text("Invite Friends")
-                }
-
+            if (blockedUserIds.isNotEmpty()) {
+                Text("Blocked from Event", style = MaterialTheme.typography.titleSmall)
                 Spacer(modifier = Modifier.height(8.dp))
+
+                val blockedProfileById = blockedUserProfiles.associateBy { it.id }
+
+                blockedUserIds.forEach { blockedUserId ->
+                    val blockedProfile = blockedProfileById[blockedUserId]
+                    val blockedName =
+                        blockedProfile
+                            ?.name
+                            ?.ifBlank { blockedProfile.email }
+                            ?.ifBlank { blockedUserId }
+                            ?: blockedUserId
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedButton(
+                            onClick = { onOpenUserProfile(blockedUserId) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(blockedName)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        UserActionMenuButton(
+                            actions =
+                                listOf(
+                                    UserActionMenuItem(
+                                        label = "Unblock from Event",
+                                        onClick = { unblockUserFromEvent(blockedUserId) },
+                                    ),
+                                ),
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
 
             Button(

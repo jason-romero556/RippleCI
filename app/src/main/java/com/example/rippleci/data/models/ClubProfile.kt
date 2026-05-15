@@ -10,6 +10,7 @@ data class ClubProfile(
     val officerIds: List<String> = emptyList(),
     val adminIds: List<String> = emptyList(),
     val eventIds: List<String> = emptyList(),
+    val blockedUserIds: List<String> = emptyList(),
     val profilePictureUrl: String = "",
     val visibility: String = "public",
 )

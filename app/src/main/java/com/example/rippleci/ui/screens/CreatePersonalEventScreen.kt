@@ -27,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -35,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -89,6 +91,9 @@ fun CreatePersonalEventScreen(
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
     var visibility by remember(initialEvent?.id) { mutableStateOf(initialEvent?.visibility ?: "public") }
+    var inviteesCanInvite by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.inviteesCanInvite ?: false)
+    }
     var statusMessage by remember { mutableStateOf("") }
 
     val dateLabel = selectedDateMillis?.let { formatEventDate(it) } ?: "Select date"
@@ -325,6 +330,24 @@ fun CreatePersonalEventScreen(
             onValueChange = { visibility = it },
         )
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Invitees can invite friends",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = inviteesCanInvite,
+                onCheckedChange = { inviteesCanInvite = it },
+            )
+        }
+
         if (statusMessage.isNotBlank()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(statusMessage, color = MaterialTheme.colorScheme.error)
@@ -374,6 +397,7 @@ fun CreatePersonalEventScreen(
                                 createdByUserId = initialEvent?.createdByUserId.orEmpty(),
                                 attendeeIds = initialEvent?.attendeeIds.orEmpty(),
                                 invitedUserIds = initialEvent?.invitedUserIds.orEmpty(),
+                                inviteesCanInvite = inviteesCanInvite,
                                 blockedUserIds = initialEvent?.blockedUserIds.orEmpty(),
                                 imageUrl = imageUrl.trim(),
                             ),

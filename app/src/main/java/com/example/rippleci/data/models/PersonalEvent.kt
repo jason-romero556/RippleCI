@@ -16,6 +16,7 @@ data class PersonalEvent(
     val createdByUserId: String = "",
     val attendeeIds: List<String> = emptyList(),
     val invitedUserIds: List<String> = emptyList(),
+    val inviteesCanInvite: Boolean = false,
     val blockedUserIds: List<String> = emptyList(),
     val imageUrl: String = "",
 )

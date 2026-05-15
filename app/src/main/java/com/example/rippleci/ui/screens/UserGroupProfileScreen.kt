@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -66,16 +67,21 @@ fun UserGroupProfileScreen(
     var description by remember { mutableStateOf("") }
     var ownerUserId by remember { mutableStateOf("") }
     var adminIds by remember { mutableStateOf<List<String>>(emptyList()) }
-    var isOwner = currentUserId == ownerUserId
-    var isAdmin = adminIds.contains(currentUserId)
-    var canManageMembers = isOwner || isAdmin
     var userGroupName by remember { mutableStateOf("") }
     var groupProfilePictureUrl by remember { mutableStateOf("") }
     var memberIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var memberProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var membersCanInvite by remember { mutableStateOf(false) }
+    var adminsCanManageInvites by remember { mutableStateOf(false) }
+    val isOwner = currentUserId == ownerUserId
+    val isAdmin = adminIds.contains(currentUserId)
+    val canManageMembers = isOwner || isAdmin
     val isMember = memberIds.contains(currentUserId)
+    val canManageInviteSettings = isOwner || (isAdmin && adminsCanManageInvites)
+    val canInviteToGroup = canManageMembers || (membersCanInvite && isMember)
     var invitedUserIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentUserName by remember { mutableStateOf("") }
+    var currentUserFriendIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var groupVisibility by remember { mutableStateOf("public") }
     var showEditGroupDialog by remember { mutableStateOf(false) }
@@ -85,6 +91,9 @@ fun UserGroupProfileScreen(
     var isUploadingGroupImage by remember { mutableStateOf(false) }
     var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var editedGroupVisibility by remember { mutableStateOf("public") }
+    var editedMembersCanInvite by remember { mutableStateOf(false) }
+    var editedAdminsCanManageInvites by remember { mutableStateOf(false) }
+    var showDisableGroupInvitesDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showOwnerLeaveDialog by remember { mutableStateOf(false) }
@@ -139,6 +148,8 @@ fun UserGroupProfileScreen(
                 adminIds = (doc.get("adminIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 memberIds = (doc.get("memberIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
                 groupVisibility = doc.getString("visibility") ?: "public"
+                membersCanInvite = doc.getBoolean("membersCanInvite") ?: false
+                adminsCanManageInvites = doc.getBoolean("adminsCanManageInvites") ?: false
                 invitedUserIds =
                     (doc.get("invitedUserIds") as? List<*>)
                         ?.mapNotNull { it as? String }
@@ -184,6 +195,8 @@ fun UserGroupProfileScreen(
                         ?.mapNotNull { it as? String }
                         ?: emptyList()
 
+                currentUserFriendIds = friendIds
+
                 if (friendIds.isNotEmpty()) {
                     db
                         .collection("users")
@@ -192,6 +205,8 @@ fun UserGroupProfileScreen(
                         .addOnSuccessListener { result ->
                             friendProfiles = result.documents.map { it.toUserProfile() }
                         }
+                } else {
+                    friendProfiles = emptyList()
                 }
             }
     }
@@ -223,6 +238,8 @@ fun UserGroupProfileScreen(
     }
 
     fun inviteUser(user: UserProfile) {
+        if (!canInviteToGroup) return
+
         val inviteId = "${ownerUserId}_${userGroupId}_${user.id}"
 
         val groupRef =
@@ -338,25 +355,109 @@ fun UserGroupProfileScreen(
             }
     }
 
-    fun updateGroupProfile() {
+    fun updateGroupProfile(removePeopleOutsideFriends: Boolean = false) {
         if (!canManageMembers || editedGroupName.isBlank()) return
 
+        val allowedUserIds =
+            (currentUserFriendIds + currentUserId + ownerUserId)
+                .filter { it.isNotBlank() }
+                .toSet()
+        val updatedMemberIds =
+            if (removePeopleOutsideFriends) {
+                memberIds.filter { it in allowedUserIds }
+            } else {
+                memberIds
+            }
+        val updatedAdminIds =
+            if (removePeopleOutsideFriends) {
+                adminIds.filter { it in allowedUserIds }
+            } else {
+                adminIds
+            }
+        val updatedInvitedUserIds =
+            if (removePeopleOutsideFriends) {
+                invitedUserIds.filter { it in allowedUserIds }
+            } else {
+                invitedUserIds
+            }
+        val removedUserIds =
+            if (removePeopleOutsideFriends) {
+                (memberIds + invitedUserIds)
+                    .distinct()
+                    .filterNot { it in allowedUserIds }
+            } else {
+                emptyList()
+            }
+
+        val updates =
+            mutableMapOf<String, Any>(
+                "name" to editedGroupName.trim(),
+                "description" to editedGroupDescription.trim(),
+                "profilePictureUrl" to editedGroupProfilePictureUrl.trim(),
+                "visibility" to editedGroupVisibility,
+            )
+
+        if (canManageInviteSettings) {
+            updates["membersCanInvite"] = editedMembersCanInvite
+        }
+
+        if (isOwner) {
+            updates["adminsCanManageInvites"] = editedAdminsCanManageInvites
+        }
+
+        if (removePeopleOutsideFriends) {
+            updates["memberIds"] = updatedMemberIds
+            updates["adminIds"] = updatedAdminIds
+            updates["invitedUserIds"] = updatedInvitedUserIds
+        }
+
+        fun applySuccessfulUpdate() {
+            userGroupName = editedGroupName.trim()
+            description = editedGroupDescription.trim()
+            groupProfilePictureUrl = editedGroupProfilePictureUrl.trim()
+            groupVisibility = editedGroupVisibility
+            if (canManageInviteSettings) {
+                membersCanInvite = editedMembersCanInvite
+            }
+            if (isOwner) {
+                adminsCanManageInvites = editedAdminsCanManageInvites
+            }
+            if (removePeopleOutsideFriends) {
+                memberIds = updatedMemberIds
+                adminIds = updatedAdminIds
+                invitedUserIds = updatedInvitedUserIds
+            }
+            showEditGroupDialog = false
+        }
+
+        if (!removePeopleOutsideFriends || removedUserIds.isEmpty()) {
+            db
+                .collection("userGroups")
+                .document(userGroupId)
+                .update(updates)
+                .addOnSuccessListener { applySuccessfulUpdate() }
+            return
+        }
+
         db
-            .collection("userGroups")
-            .document(userGroupId)
-            .update(
-                mapOf(
-                    "name" to editedGroupName.trim(),
-                    "description" to editedGroupDescription.trim(),
-                    "profilePictureUrl" to editedGroupProfilePictureUrl.trim(),
-                    "visibility" to editedGroupVisibility,
-                ),
-            ).addOnSuccessListener {
-                userGroupName = editedGroupName.trim()
-                description = editedGroupDescription.trim()
-                groupProfilePictureUrl = editedGroupProfilePictureUrl.trim()
-                groupVisibility = editedGroupVisibility
-                showEditGroupDialog = false
+            .collection("userGroupInvites")
+            .whereEqualTo("groupId", userGroupId)
+            .get()
+            .addOnSuccessListener { result ->
+                val batch = db.batch()
+                batch.update(db.collection("userGroups").document(userGroupId), updates)
+                result.documents
+                    .filter { inviteDoc -> removedUserIds.contains(inviteDoc.getString("toUserId").orEmpty()) }
+                    .forEach { inviteDoc ->
+                        batch.update(
+                            inviteDoc.reference,
+                            mapOf(
+                                "status" to "removed",
+                                "updatedAt" to System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                batch.commit().addOnSuccessListener { applySuccessfulUpdate() }
             }
     }
 
@@ -376,6 +477,7 @@ fun UserGroupProfileScreen(
                 "createdByUserId" to currentUserId,
                 "attendeeIds" to emptyList<String>(),
                 "blockedUserIds" to emptyList<String>(),
+                "inviteesCanInvite" to newEvent.inviteesCanInvite,
                 "visibility" to newEvent.visibility,
                 "createdAt" to System.currentTimeMillis(),
                 "ownerUserId" to currentUserId,
@@ -432,7 +534,7 @@ fun UserGroupProfileScreen(
         )
     }
 
-    if (showEditGroupDialog) {
+    if (showEditGroupDialog && !showDisableGroupInvitesDialog) {
         AlertDialog(
             onDismissRequest = { showEditGroupDialog = false },
             title = { Text("Edit Group") },
@@ -476,11 +578,56 @@ fun UserGroupProfileScreen(
                         options = GroupVisibilityOptions,
                         onValueChange = { editedGroupVisibility = it },
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Members can invite friends",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = editedMembersCanInvite,
+                            onCheckedChange = { editedMembersCanInvite = it },
+                            enabled = canManageInviteSettings,
+                        )
+                    }
+
+                    if (isOwner) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "Admins can manage invites",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Switch(
+                                checked = editedAdminsCanManageInvites,
+                                onCheckedChange = { editedAdminsCanManageInvites = it },
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
-                    onClick = { updateGroupProfile() },
+                    onClick = {
+                        if (isOwner && membersCanInvite && !editedMembersCanInvite) {
+                            showDisableGroupInvitesDialog = true
+                        } else {
+                            updateGroupProfile()
+                        }
+                    },
                     enabled = editedGroupName.isNotBlank() && !isUploadingGroupImage,
                 ) {
                     Text("Save")
@@ -489,6 +636,34 @@ fun UserGroupProfileScreen(
             dismissButton = {
                 OutlinedButton(onClick = { showEditGroupDialog = false }) {
                     Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (showDisableGroupInvitesDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisableGroupInvitesDialog = false },
+            title = { Text("Disable Open Invites") },
+            text = { Text("Remove members and pending invitees who are not in your friends list?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDisableGroupInvitesDialog = false
+                        updateGroupProfile(removePeopleOutsideFriends = true)
+                    },
+                ) {
+                    Text("Remove Non-Friends")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showDisableGroupInvitesDialog = false
+                        updateGroupProfile(removePeopleOutsideFriends = false)
+                    },
+                ) {
+                    Text("Keep Everyone")
                 }
             },
         )
@@ -610,6 +785,8 @@ fun UserGroupProfileScreen(
                     editedGroupDescription = description
                     editedGroupProfilePictureUrl = groupProfilePictureUrl
                     editedGroupVisibility = groupVisibility
+                    editedMembersCanInvite = membersCanInvite
+                    editedAdminsCanManageInvites = adminsCanManageInvites
                     showEditGroupDialog = true
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -618,7 +795,9 @@ fun UserGroupProfileScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+        }
 
+        if (canInviteToGroup) {
             Button(
                 onClick = { showInviteDialog = true },
                 modifier = Modifier.fillMaxWidth(),

@@ -60,9 +60,16 @@ fun ProfileHeader(
         Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
+            val titleStyle =
+                when {
+                    title.length > 38 -> MaterialTheme.typography.titleLarge
+                    title.length > 26 -> MaterialTheme.typography.headlineSmall
+                    else -> MaterialTheme.typography.headlineMedium
+                }
+
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineMedium,
+                style = titleStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
