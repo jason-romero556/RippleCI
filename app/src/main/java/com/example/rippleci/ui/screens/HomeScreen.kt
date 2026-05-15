@@ -49,7 +49,14 @@ fun HomeScreen(
     var markedSchoolEvents by remember { mutableStateOf<Map<String, SchoolEvent>>(emptyMap()) }
     val uiState by eventsViewModel.uiState.collectAsState()
     val nowMillis = System.currentTimeMillis()
-    val todayLabel = remember(nowMillis) { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(nowMillis)) }
+    val todayWeekdayLabel =
+        remember(nowMillis) {
+            SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(nowMillis))
+        }
+    val todayDateLabel =
+        remember(nowMillis) {
+            SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(nowMillis))
+        }
 
     var schoolEventsExpanded by remember { mutableStateOf(true) }
     var myEventsExpanded by remember { mutableStateOf(true) }
@@ -180,25 +187,26 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(
+            FlowRow(
                 modifier =
                     Modifier
                         .weight(1f)
                         .clickable { myEventsExpanded = !myEventsExpanded }
                         .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Today's Events - $todayLabel",
+                    text = "Today's Events - $todayWeekdayLabel, ",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f),
                 )
-                Icon(
-                    imageVector = if (myEventsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (myEventsExpanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.primary,
+                Text(
+                    text = todayDateLabel,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
 
