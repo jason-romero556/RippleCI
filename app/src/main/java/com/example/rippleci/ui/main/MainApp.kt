@@ -24,9 +24,11 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.AppRoute
 import com.example.rippleci.ui.components.HelpfulLinksMenuButton
@@ -148,7 +150,10 @@ fun MainApp(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .zIndex(1f),
                 color = if (usesAppPalette) MaterialTheme.colorScheme.primary else Color.Transparent,
                 shadowElevation = 4.dp,
             ) {
@@ -257,7 +262,13 @@ fun MainApp(
                     // 2. MAIN SCREEN CONTENT
                     // Modifier.weight(1f) ensures this takes up all remaining space
                     // without covering the bottom navigation bar.
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clipToBounds(),
+                    ) {
                         when (currentDestination) {
                             AppDestinations.HOME -> {
                                 HomeScreen(
