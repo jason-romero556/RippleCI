@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -27,15 +29,22 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -100,6 +109,7 @@ fun MapScreen() {
     var selectedLocationId by rememberSaveable { mutableStateOf<String?>(null) }
     var routeStartId by rememberSaveable { mutableStateOf(campusSites.firstOrNull()?.id) }
     var routeEndId by rememberSaveable { mutableStateOf(campusSites.getOrNull(1)?.id) }
+    var directorySearchQuery by rememberSaveable { mutableStateOf("") }
 
     val selectedLocation = campusSites.find { it.id == selectedLocationId }
     val routeStart = campusSites.find { it.id == routeStartId }
@@ -197,22 +207,6 @@ fun MapScreen() {
             }
         }
 
-        if (mapStyle == CampusMapStyle.OSM) {
-            Card(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(bottom = 16.dp, end = 16.dp),
-            ) {
-                Text(
-                    text = "(C) OpenStreetMap contributors",
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
-                )
-            }
-        }
-
         // Overlay Controls
         Column(
             modifier = Modifier
@@ -252,44 +246,19 @@ fun MapScreen() {
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 )
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Map Style Toggle
-                Box {
-                    var styleMenuExpanded by remember { mutableStateOf(false) }
-                    IconButton(
-                        onClick = { styleMenuExpanded = true },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Place, contentDescription = "Map Style")
-                    }
-                    DropdownMenu(
-                        expanded = styleMenuExpanded,
-                        onDismissRequest = { styleMenuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Google Maps") },
-                            onClick = { mapStyle = CampusMapStyle.GOOGLE; styleMenuExpanded = false },
-                            leadingIcon = { if (mapStyle == CampusMapStyle.GOOGLE) Icon(Icons.Default.Check, null) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("OpenStreetMap") },
-                            onClick = { mapStyle = CampusMapStyle.OSM; styleMenuExpanded = false },
-                            leadingIcon = { if (mapStyle == CampusMapStyle.OSM) Icon(Icons.Default.Check, null) }
-                        )
-                    }
-                }
             }
 
             if (directoryExpanded) {
                 DirectoryPanel(
                     locations = campusSites,
+                    searchQuery = directorySearchQuery,
+                    onSearchQueryChange = { directorySearchQuery = it },
                     selectedLocationId = selectedLocationId,
                     onSelectLocation = { location ->
                         selectedLocationId = location.id
                         routeEndId = location.id
                         directoryExpanded = false
+                        directorySearchQuery = ""
                     },
                 )
             }
@@ -333,6 +302,51 @@ fun MapScreen() {
                 }
             }
         }
+
+        // Bottom Right Controls (Map Style Toggle & Attribution)
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box {
+                var styleMenuExpanded by remember { mutableStateOf(false) }
+                IconButton(
+                    onClick = { styleMenuExpanded = true },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
+                ) {
+                    Icon(Icons.Default.DirectionsWalk, contentDescription = "Map Style")
+                }
+                DropdownMenu(
+                    expanded = styleMenuExpanded,
+                    onDismissRequest = { styleMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Google Maps") },
+                        onClick = { mapStyle = CampusMapStyle.GOOGLE; styleMenuExpanded = false },
+                        leadingIcon = { if (mapStyle == CampusMapStyle.GOOGLE) Icon(Icons.Default.Check, null) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("OpenStreetMap") },
+                        onClick = { mapStyle = CampusMapStyle.OSM; styleMenuExpanded = false },
+                        leadingIcon = { if (mapStyle == CampusMapStyle.OSM) Icon(Icons.Default.Check, null) }
+                    )
+                }
+            }
+
+            if (mapStyle == CampusMapStyle.OSM) {
+                Card {
+                    Text(
+                        text = "(C) OpenStreetMap contributors",
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -370,48 +384,82 @@ private fun FloatingPanel(
 @Composable
 private fun DirectoryPanel(
     locations: List<CampusLocation>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     selectedLocationId: String?,
     onSelectLocation: (CampusLocation) -> Unit,
 ) {
+    val filteredLocations = remember(locations, searchQuery) {
+        if (searchQuery.isBlank()) {
+            locations
+        } else {
+            locations.filter {
+                it.name.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     ElevatedCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = 360.dp),
+                .heightIn(max = 420.dp),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Building Directory", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "Tap a building to jump to its marker and exact coordinates.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            HorizontalDivider()
-            LazyColumn(
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(locations, key = { it.id }) { location ->
-                    val isSelected = location.id == selectedLocationId
-                    TextButton(
-                        onClick = { onSelectLocation(location) },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                                ),
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.Start,
+                placeholder = { Text("Search buildings...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium,
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+
+            HorizontalDivider()
+
+            if (filteredLocations.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Text("No buildings found matching \"$searchQuery\"", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(filteredLocations, key = { it.id }) { location ->
+                        val isSelected = location.id == selectedLocationId
+                        TextButton(
+                            onClick = { onSelectLocation(location) },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                        shape = MaterialTheme.shapes.small
+                                    ),
                         ) {
-                            Text(location.name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
-                            Text(
-                                formatCoordinate(location.coordinate),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.Start,
+                            ) {
+                                Text(
+                                    text = location.name,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    formatCoordinate(location.coordinate),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -457,6 +505,7 @@ private fun RoutePlannerPanel(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CampusLocationDropdown(
     label: String,
@@ -465,37 +514,48 @@ private fun CampusLocationDropdown(
     onSelected: (CampusLocation) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedName = locations.find { it.id == selectedLocationId }?.name.orEmpty()
+    val selectedLocation = locations.find { it.id == selectedLocationId }
+    val selectedName = selectedLocation?.name.orEmpty()
 
-    Box(modifier = Modifier.fillMaxWidth()) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.Start,
-            ) {
-                Text(label, style = MaterialTheme.typography.labelMedium)
-                Text(
-                    text = selectedName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        TextField(
+            value = selectedName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.textFieldColors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+        )
 
-        DropdownMenu(
+        ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
         ) {
             locations.forEach { location ->
                 DropdownMenuItem(
-                    text = { Text(location.name) },
+                    text = {
+                        Text(
+                            text = location.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (location.id == selectedLocationId) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
                     onClick = {
                         onSelected(location)
                         expanded = false
                     },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                 )
             }
         }
