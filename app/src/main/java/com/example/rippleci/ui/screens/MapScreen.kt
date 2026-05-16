@@ -1,27 +1,29 @@
 package com.example.rippleci.ui.screens
 
 import android.Manifest
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,20 +33,17 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -105,6 +105,7 @@ fun MapScreen() {
     var mapStyle by rememberSaveable { mutableStateOf(CampusMapStyle.GOOGLE) }
     var directoryExpanded by rememberSaveable { mutableStateOf(false) }
     var plannerExpanded by rememberSaveable { mutableStateOf(false) }
+    var liveLocationEnabled by rememberSaveable { mutableStateOf(true) }
     var routePanelCollapsed by rememberSaveable { mutableStateOf(false) }
     var selectedLocationId by rememberSaveable { mutableStateOf<String?>(null) }
     var routeStartId by rememberSaveable { mutableStateOf(campusSites.firstOrNull()?.id) }
@@ -168,19 +169,19 @@ fun MapScreen() {
             cameraPositionState = cameraPositionState,
             properties =
                 MapProperties(
-                    isMyLocationEnabled = locationPermissionState.status.isGranted,
+                    isMyLocationEnabled = liveLocationEnabled && locationPermissionState.status.isGranted,
                     mapType = if (mapStyle == CampusMapStyle.OSM) MapType.NONE else MapType.NORMAL,
                 ),
             uiSettings =
                 MapUiSettings(
                     compassEnabled = true,
                     zoomControlsEnabled = false,
-                    myLocationButtonEnabled = locationPermissionState.status.isGranted,
+                    myLocationButtonEnabled = false,
                     mapToolbarEnabled = false,
                 ),
         ) {
             if (mapStyle == CampusMapStyle.OSM) {
-                TileOverlay(tileProvider = osmTileProvider)
+                TileOverlay(tileProvider = osmTileProvider, zIndex = -1f)
             }
 
             visiblePins.forEach { location ->
@@ -198,14 +199,50 @@ fun MapScreen() {
             if (displayedRoutePoints.size >= 2) {
                 Polyline(
                     points = displayedRoutePoints,
-                    color = Color(0xFF006D5B),
-                    width = 16f,
+                    color = Color.White,
+                    width = 22f,
                     startCap = RoundCap(),
                     endCap = RoundCap(),
                     jointType = JointType.ROUND,
+                    zIndex = 5f,
+                )
+                Polyline(
+                    points = displayedRoutePoints,
+                    color = Color(0xFF006D5B),
+                    width = 12f,
+                    startCap = RoundCap(),
+                    endCap = RoundCap(),
+                    jointType = JointType.ROUND,
+                    zIndex = 6f,
                 )
             }
         }
+
+        if (mapStyle == CampusMapStyle.OSM) {
+            Card(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 8.dp, bottom = 8.dp),
+            ) {
+                Text(
+                    text = "(C) OpenStreetMap contributors",
+                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 6.sp,
+                )
+            }
+        }
+
+        MapZoomControls(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 18.dp)
+                    .zIndex(2f),
+            onZoomIn = { cameraPositionState.move(CameraUpdateFactory.zoomIn()) },
+            onZoomOut = { cameraPositionState.move(CameraUpdateFactory.zoomOut()) },
+        )
 
         // Overlay Controls
         Column(
@@ -216,35 +253,46 @@ fun MapScreen() {
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilterChip(
+                MapToolbarChip(
+                    label = "Directory",
                     selected = directoryExpanded,
+                    leadingIcon = Icons.Default.Search,
                     onClick = {
                         directoryExpanded = !directoryExpanded
                         if (directoryExpanded) plannerExpanded = false
                     },
-                    label = { Text("Directory") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
                 )
 
-                FilterChip(
+                MapToolbarChip(
+                    label = "Route",
                     selected = plannerExpanded,
+                    leadingIcon = Icons.Default.LocationOn,
                     onClick = {
                         plannerExpanded = !plannerExpanded
                         if (plannerExpanded) directoryExpanded = false
                     },
-                    label = { Text("Route") },
-                    leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+                )
+
+                MapStyleSelector(
+                    mapStyle = mapStyle,
+                    onMapStyleSelected = { mapStyle = it },
+                )
+
+                MapToolbarChip(
+                    label = "Live",
+                    selected = liveLocationEnabled && locationPermissionState.status.isGranted,
+                    leadingIcon = Icons.Default.Place,
+                    onClick = {
+                        if (locationPermissionState.status.isGranted) {
+                            liveLocationEnabled = !liveLocationEnabled
+                        } else {
+                            liveLocationEnabled = true
+                            locationPermissionState.launchPermissionRequest()
+                        }
+                    },
                 )
             }
 
@@ -303,48 +351,179 @@ fun MapScreen() {
             }
         }
 
-        // Bottom Right Controls (Map Style Toggle & Attribution)
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box {
-                var styleMenuExpanded by remember { mutableStateOf(false) }
-                IconButton(
-                    onClick = { styleMenuExpanded = true },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
-                ) {
-                    Icon(Icons.Default.DirectionsWalk, contentDescription = "Map Style")
-                }
-                DropdownMenu(
-                    expanded = styleMenuExpanded,
-                    onDismissRequest = { styleMenuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Google Maps") },
-                        onClick = { mapStyle = CampusMapStyle.GOOGLE; styleMenuExpanded = false },
-                        leadingIcon = { if (mapStyle == CampusMapStyle.GOOGLE) Icon(Icons.Default.Check, null) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("OpenStreetMap") },
-                        onClick = { mapStyle = CampusMapStyle.OSM; styleMenuExpanded = false },
-                        leadingIcon = { if (mapStyle == CampusMapStyle.OSM) Icon(Icons.Default.Check, null) }
-                    )
-                }
-            }
+    }
+}
 
-            if (mapStyle == CampusMapStyle.OSM) {
-                Card {
-                    Text(
-                        text = "(C) OpenStreetMap contributors",
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 9.sp,
-                    )
-                }
+@Composable
+private fun RowScope.MapToolbarChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    leadingIcon: ImageVector? = null,
+) {
+    val containerColor =
+        if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+        }
+    val contentColor =
+        if (selected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+
+    Surface(
+        onClick = onClick,
+        modifier =
+            Modifier
+                .weight(1f)
+                .height(38.dp),
+        shape = RoundedCornerShape(9.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        border =
+            BorderStroke(
+                width = 1.dp,
+                color =
+                    if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                    } else {
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)
+                    },
+            ),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            leadingIcon?.let {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RowScope.MapStyleSelector(
+    mapStyle: CampusMapStyle,
+    onMapStyleSelected: (CampusMapStyle) -> Unit,
+) {
+    var styleMenuExpanded by remember { mutableStateOf(false) }
+    val providerLabel =
+        when (mapStyle) {
+            CampusMapStyle.GOOGLE -> "Google"
+            CampusMapStyle.OSM -> "OSM"
+        }
+
+    Box(
+        modifier =
+            Modifier
+                .weight(1f)
+                .height(38.dp),
+    ) {
+        Surface(
+            onClick = { styleMenuExpanded = true },
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(9.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.96f),
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            border =
+                BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f),
+                ),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Maps",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                Text(
+                    text = providerLabel,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f),
+                    maxLines = 1,
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = styleMenuExpanded,
+            onDismissRequest = { styleMenuExpanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Google Maps") },
+                onClick = {
+                    onMapStyleSelected(CampusMapStyle.GOOGLE)
+                    styleMenuExpanded = false
+                },
+                leadingIcon = {
+                    if (mapStyle == CampusMapStyle.GOOGLE) {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                    }
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("OpenStreetMap") },
+                onClick = {
+                    onMapStyleSelected(CampusMapStyle.OSM)
+                    styleMenuExpanded = false
+                },
+                leadingIcon = {
+                    if (mapStyle == CampusMapStyle.OSM) {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MapZoomControls(
+    modifier: Modifier = Modifier,
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+) {
+    ElevatedCard(modifier = modifier.width(44.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            IconButton(
+                onClick = onZoomIn,
+                modifier = Modifier.size(42.dp),
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Zoom in")
+            }
+            HorizontalDivider(modifier = Modifier.fillMaxWidth())
+            IconButton(
+                onClick = onZoomOut,
+                modifier = Modifier.size(42.dp),
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Zoom out")
             }
         }
     }
