@@ -1,5 +1,8 @@
 package com.example.rippleci.data.models
 
+const val MESSAGE_PRIVACY_EVERYONE = "everyone"
+const val MESSAGE_PRIVACY_FRIENDS = "friends"
+
 data class UserProfile(
     val id: String = "",
     val name: String = "",
@@ -12,4 +15,8 @@ data class UserProfile(
     val friendIds: List<String> = emptyList(),
     val profilePictureUrl: String = "",
     val visibility: String = "public",
+    val messagePrivacy: String = MESSAGE_PRIVACY_FRIENDS,
+    val presenceMode: String = "automatic",
+    val presenceStatus: String = "closed",
+    val presenceUpdatedAt: Long = 0L,
 )

@@ -1,9 +1,16 @@
 package com.example.rippleci.ui.main
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,15 +18,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -29,32 +47,115 @@ import com.example.rippleci.ui.events.EventsScreen
 import com.example.rippleci.ui.messages.ConversationScreen
 import com.example.rippleci.ui.messages.MessagesScreen
 import com.example.rippleci.ui.messages.MessagesViewModel
+import com.example.rippleci.ui.notifications.NotificationNavigationTarget
 import com.example.rippleci.ui.screens.ClubProfileScreen
 import com.example.rippleci.ui.screens.EventProfileScreen
 import com.example.rippleci.ui.screens.FriendsScreen
 import com.example.rippleci.ui.screens.HomeScreen
 import com.example.rippleci.ui.screens.MapScreen
 import com.example.rippleci.ui.screens.ProfileScreen
+import com.example.rippleci.ui.screens.UserGroupProfileScreen
 import com.example.rippleci.ui.screens.UserProfileScreen
+import com.example.rippleci.ui.theme.AppTheme
+import com.example.rippleci.ui.theme.ThemeViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
 @Composable
-fun MainApp(onSignOut: () -> Unit) {
-    var currentDestination by remember { mutableStateOf(AppDestinations.MAP) }
-    var route by remember { mutableStateOf<AppRoute>(AppRoute.MainTabs) }
-    // var openConversationId by remember { mutableStateOf<String?>(null) }
-    // var openConversationName by remember { mutableStateOf("") }
+fun MainApp(
+    themeViewModel: ThemeViewModel,
+    notificationNavigationTarget: NotificationNavigationTarget? = null,
+    onNotificationNavigationHandled: () -> Unit = {},
+    onSignOut: () -> Unit,
+) {
+    var currentDestination by remember { mutableStateOf(AppDestinations.HOME) }
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
+    var routeStack by remember { mutableStateOf<List<AppRoute>>(emptyList()) }
+    var profileTitlesByUserId by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var isBackNavigation by remember { mutableStateOf(false) }
+    var requestedFriendsTab by remember { mutableStateOf<Int?>(null) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    val route = routeStack.lastOrNull() ?: AppRoute.MainTabs
+
+    fun navigateTo(nextRoute: AppRoute) {
+        isBackNavigation = false
+        routeStack = routeStack + nextRoute
+    }
+
+    fun navigateToUserProfile(
+        userId: String,
+        displayName: String = "",
+    ) {
+        navigateTo(AppRoute.UserProfile(userId, displayName))
+    }
+
+    fun popRoute() {
+        isBackNavigation = true
+        routeStack = routeStack.dropLast(1)
+    }
+
+    fun resetToTabs() {
+        isBackNavigation = false
+        routeStack = emptyList()
+    }
+
+    LaunchedEffect(notificationNavigationTarget) {
+        val target = notificationNavigationTarget ?: return@LaunchedEffect
+        isBackNavigation = false
+
+        when (target.navigateTo) {
+            "friends" -> {
+                routeStack = emptyList()
+                currentDestination = AppDestinations.FRIENDS
+                requestedFriendsTab = 1
+            }
+
+            "messages" -> {
+                currentDestination = AppDestinations.MESSAGES
+                if (target.conversationId.isBlank()) {
+                    routeStack = emptyList()
+                } else {
+                    routeStack =
+                        listOf(
+                            AppRoute.Conversation(
+                                conversationId = target.conversationId,
+                                title = target.title.ifBlank { "Conversation" },
+                            ),
+                        )
+                }
+            }
+        }
+
+        onNotificationNavigationHandled()
+    }
+
+    val usesAppPalette = themeViewModel.appTheme != AppTheme.DYNAMIC
+    val topBarContentColor =
+        if (usesAppPalette) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val navSuiteColors =
+        if (usesAppPalette) {
+            NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = MaterialTheme.colorScheme.primary,
+                navigationBarContentColor = MaterialTheme.colorScheme.onPrimary,
+                navigationRailContainerColor = MaterialTheme.colorScheme.primary,
+                navigationRailContentColor = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            NavigationSuiteDefaults.colors()
+        }
 
     NavigationSuiteScaffold(
-        {
+        navigationSuiteItems = {
             AppDestinations.entries.forEach { destination ->
                 item(
                     selected = currentDestination == destination,
                     onClick = {
-                        route = AppRoute.MainTabs
+                        resetToTabs()
                         currentDestination = destination
                     },
                     icon = {
@@ -69,44 +170,139 @@ fun MainApp(onSignOut: () -> Unit) {
                 )
             }
         },
+        navigationSuiteColors = navSuiteColors,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 4.dp, // Add a slight shadow for depth
+                color = if (usesAppPalette) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shadowElevation = 4.dp,
             ) {
                 Box(
                     modifier =
                         Modifier
-                            .statusBarsPadding()
+                            .then(
+                                if (usesAppPalette) {
+                                    Modifier
+                                } else {
+                                    Modifier.background(
+                                        brush =
+                                            Brush.verticalGradient(
+                                                colors =
+                                                    listOf(
+                                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                                        MaterialTheme.colorScheme.surface,
+                                                    ),
+                                            ),
+                                    )
+                                },
+                            ).statusBarsPadding()
                             .height(56.dp)
                             .fillMaxWidth(),
                 )
                 {
-                    HelpfulLinksMenuButton(
-                        modifier =
-                            Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 8.dp),
-                    )
-                    Text(
-                        text = currentDestination.label,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.align(Alignment.Center),
-                    )
-                    if (route != AppRoute.MainTabs) {
+                    if (routeStack.isEmpty()) {
+                        HelpfulLinksMenuButton(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 8.dp),
+                            tint = topBarContentColor,
+                        )
+                    } else {
                         IconButton(
-                            onClick = { route = AppRoute.MainTabs },
-                            modifier = Modifier.align(Alignment.CenterEnd),
+                            onClick = { popRoute() },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 8.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
+                                tint = topBarContentColor,
+                            )
+                        }
+                    }
+
+                    val title =
+                        when (val currentRoute = route) {
+                            is AppRoute.Conversation -> {
+                                currentRoute.title
+                            }
+
+                            is AppRoute.Events -> {
+                                "Events"
+                            }
+
+                            is AppRoute.UserProfile -> {
+                                val displayName =
+                                    profileTitlesByUserId[currentRoute.userId]
+                                        .orEmpty()
+                                        .ifBlank { currentRoute.displayName }
+
+                                if (displayName.isBlank()) "User Profile" else "$displayName's Profile"
+                            }
+
+                            is AppRoute.ClubProfile -> {
+                                "Club Profile"
+                            }
+
+                            is AppRoute.UserGroupProfile -> {
+                                "Group Profile"
+                            }
+
+                            is AppRoute.EventProfile -> {
+                                "Event Profile"
+                            }
+
+                            AppRoute.MainTabs -> {
+                                currentDestination.label
+                            }
+                        }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.align(Alignment.Center),
+                        color = topBarContentColor,
+                    )
+
+                    if (route is AppRoute.Conversation) {
+                        IconButton(
+                            onClick = { showClearChatDialog = true },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Clear Chat",
+                                tint = topBarContentColor,
                             )
                         }
                     }
                 }
+            }
+
+            if (showClearChatDialog && route is AppRoute.Conversation) {
+                AlertDialog(
+                    onDismissRequest = { showClearChatDialog = false },
+                    title = { Text("Clear Chat History") },
+                    text = { Text("This will delete all messages for you. Are you sure?") },
+                    confirmButton = {
+                        Button(onClick = {
+                            messagesViewModel.clearChatHistory(route.conversationId) {
+                                showClearChatDialog = false
+                            }
+                        }) { Text("Clear") }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { showClearChatDialog = false }) {
+                            Text("Cancel")
+                        }
+                    },
+                )
             }
 
             when (val currentRoute = route) {
@@ -116,17 +312,33 @@ fun MainApp(onSignOut: () -> Unit) {
                     // without covering the bottom navigation bar.
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         when (currentDestination) {
+                            AppDestinations.HOME -> {
+                                HomeScreen(
+                                    onOpenEventProfile = { ownerUserId, eventId, groupId ->
+                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId, groupId))
+                                    },
+                                    onAddEvent = { navigateTo(AppRoute.Events) },
+                                )
+                            }
+
                             AppDestinations.MAP -> {
                                 MapScreen()
                             }
 
                             AppDestinations.FRIENDS -> {
                                 FriendsScreen(
-                                    onOpenConversation = { conversationId, convName ->
-                                        route = AppRoute.Conversation(conversationId, convName)
+                                    requestedSelectedTab = requestedFriendsTab,
+                                    onSelectedTabRequestHandled = {
+                                        requestedFriendsTab = null
                                     },
-                                    onOpenUserProfile = { userId ->
-                                        route = AppRoute.UserProfile(userId)
+                                    onOpenConversation = { conversationId, convName ->
+                                        navigateTo(AppRoute.Conversation(conversationId, convName))
+                                    },
+                                    onOpenUserProfile = { userId, displayName ->
+                                        navigateToUserProfile(userId, displayName)
+                                    },
+                                    onOpenUserGroupProfile = { groupId ->
+                                        navigateTo(AppRoute.UserGroupProfile(groupId))
                                     },
                                     messagesViewModel = messagesViewModel,
                                 )
@@ -135,73 +347,130 @@ fun MainApp(onSignOut: () -> Unit) {
                             AppDestinations.MESSAGES -> {
                                 MessagesScreen(
                                     onOpenConversation = { conversationId, convName ->
-                                        route = AppRoute.Conversation(conversationId, convName)
+                                        navigateTo(AppRoute.Conversation(conversationId, convName))
                                     },
                                     onOpenUserProfile = { userId ->
-                                        route = AppRoute.UserProfile(userId)
+                                        navigateTo(AppRoute.UserProfile(userId))
                                     },
                                     onOpenClubProfile = { clubId ->
-                                        route = AppRoute.ClubProfile(clubId)
+                                        navigateTo(AppRoute.ClubProfile(clubId))
                                     },
                                     onOpenEventProfile = { eventId ->
-                                        route = AppRoute.EventProfile(eventId)
+                                        navigateTo(AppRoute.EventProfile(eventId))
                                     },
                                     viewModel = messagesViewModel,
                                 )
                             }
 
                             AppDestinations.PROFILE -> {
-                                ProfileScreen(onSignOut = onSignOut)
-                            }
-
-                            AppDestinations.EVENTS -> {
-                                EventsScreen()
+                                ProfileScreen(
+                                    themeViewModel = themeViewModel,
+                                    onSignOut = onSignOut,
+                                )
                             }
                         }
                     }
+                }
+
+                is AppRoute.Events -> {
+                    EventsScreen(
+                        onOpenEventProfile = { ownerUserId, eventId, groupId ->
+                            navigateTo(
+                                AppRoute.EventProfile(
+                                    eventId = eventId,
+                                    ownerUserId = ownerUserId,
+                                    groupId = groupId,
+                                ),
+                            )
+                        },
+                    )
                 }
 
                 is AppRoute.Conversation -> {
                     ConversationScreen(
                         conversationId = currentRoute.conversationId,
                         conversationName = currentRoute.title,
-                        onBack = { route = AppRoute.MainTabs },
+                        onBack = { popRoute() },
                         viewModel = messagesViewModel,
                     )
                 }
 
                 is AppRoute.UserProfile -> {
-                    UserProfileScreen(
-                        userId = currentRoute.userId,
-                        onBack = { route = AppRoute.MainTabs },
-                        onOpenUserProfile = { userId ->
-                            route = AppRoute.UserProfile(userId)
+                    AnimatedContent(
+                        targetState = currentRoute,
+                        label = "UserProfileTransition",
+                        transitionSpec = {
+                            val direction = if (isBackNavigation) -1 else 1
+
+                            (
+                                slideInHorizontally(animationSpec = tween(220)) { width -> direction * width / 4 } +
+                                    fadeIn(animationSpec = tween(220))
+                            ).togetherWith(
+                                slideOutHorizontally(animationSpec = tween(180)) { width -> -direction * width / 4 } +
+                                    fadeOut(animationSpec = tween(180)),
+                            ).using(SizeTransform(clip = false))
                         },
-                        onOpenClubProfile = { clubId ->
-                            route = AppRoute.ClubProfile(clubId)
-                        },
-                        onOpenEventProfile = { eventId ->
-                            route = AppRoute.EventProfile(eventId)
-                        },
-                    )
+                    ) { profileRoute ->
+                        UserProfileScreen(
+                            userId = profileRoute.userId,
+                            onBack = { popRoute() },
+                            onProfileLoaded = { loadedUserId, loadedName ->
+                                if (loadedName.isNotBlank()) {
+                                    profileTitlesByUserId = profileTitlesByUserId + (loadedUserId to loadedName)
+                                }
+                            },
+                            onOpenConversation = { conversationId, conversationName ->
+                                navigateTo(AppRoute.Conversation(conversationId, conversationName))
+                            },
+                            onOpenUserProfile = { userId, displayName ->
+                                navigateToUserProfile(userId, displayName)
+                            },
+                            onOpenClubProfile = { clubId ->
+                                navigateTo(AppRoute.ClubProfile(clubId))
+                            },
+                            onOpenEventProfile = { eventId, eventOwnerUserId, eventGroupId ->
+                                navigateTo(
+                                    AppRoute.EventProfile(
+                                        eventId = eventId,
+                                        ownerUserId = eventOwnerUserId,
+                                        groupId = eventGroupId,
+                                    ),
+                                )
+                            },
+                            messagesViewModel = messagesViewModel,
+                        )
+                    }
                 }
 
                 is AppRoute.ClubProfile -> {
                     ClubProfileScreen(
                         clubId = currentRoute.clubId,
                         isMember = true,
-                        onBack = { route = AppRoute.MainTabs },
+                        onBack = { popRoute() },
                         onJoinClub = { /* Handle join club logic */ },
                         onLeaveClub = { /* Handle leave club logic */ },
                         onViewEvents = { /* Handle view events logic */ },
                         onOpenUserProfile = { userId ->
-                            route = AppRoute.UserProfile(userId)
+                            navigateToUserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
-                            route = AppRoute.ClubProfile(clubId)
+                            navigateTo(AppRoute.ClubProfile(clubId))
                         },
                         onOpenEventProfile = { eventId ->
-                            route = AppRoute.EventProfile(eventId)
+                            navigateTo(AppRoute.EventProfile(eventId))
+                        },
+                    )
+                }
+
+                is AppRoute.UserGroupProfile -> {
+                    UserGroupProfileScreen(
+                        userGroupId = currentRoute.userGroupId,
+                        onBack = { popRoute() },
+                        onOpenUserProfile = { userId ->
+                            navigateToUserProfile(userId)
+                        },
+                        onOpenEventProfile = { eventId, ownerUserId, groupId ->
+                            navigateTo(AppRoute.EventProfile(eventId, ownerUserId, groupId))
                         },
                     )
                 }
@@ -209,15 +478,17 @@ fun MainApp(onSignOut: () -> Unit) {
                 is AppRoute.EventProfile -> {
                     EventProfileScreen(
                         eventId = currentRoute.eventId,
-                        onBack = { route = AppRoute.MainTabs },
+                        ownerUserId = currentRoute.ownerUserId,
+                        groupId = currentRoute.groupId,
+                        onBack = { popRoute() },
                         onOpenUserProfile = { userId ->
-                            route = AppRoute.UserProfile(userId)
+                            navigateToUserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
-                            route = AppRoute.ClubProfile(clubId)
+                            navigateTo(AppRoute.ClubProfile(clubId))
                         },
                         onOpenEventProfile = { eventId ->
-                            route = AppRoute.EventProfile(eventId)
+                            navigateTo(AppRoute.EventProfile(eventId))
                         },
                     )
                 }

@@ -5,7 +5,8 @@ data class Message(
     val senderId: String = "",
     val senderName: String = "",
     val text: String = "",
-    val timestamp: Long = 0L
+    val timestamp: Long = 0L,
+    val readBy: List<String> = emptyList()
 )
 
 data class Conversation(

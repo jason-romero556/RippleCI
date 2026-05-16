@@ -5,18 +5,27 @@ sealed class AppRoute {
 
     data class UserProfile(
         val userId: String,
+        val displayName: String = "",
     ) : AppRoute()
 
     data class ClubProfile(
         val clubId: String,
     ) : AppRoute()
 
+    data class UserGroupProfile(
+        val userGroupId: String,
+    ) : AppRoute()
+
     data class EventProfile(
         val eventId: String,
+        val ownerUserId: String = "",
+        val groupId: String = "",
     ) : AppRoute()
 
     data class Conversation(
         val conversationId: String,
         val title: String,
     ) : AppRoute()
+
+    data object Events : AppRoute()
 }
