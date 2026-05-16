@@ -1,5 +1,8 @@
 package com.example.rippleci.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.example.rippleci.data.CsuciClassYears
@@ -18,6 +22,7 @@ import com.example.rippleci.data.CsuciMajors
 import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.models.FriendRequest
+import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.UserGroupInvite
 import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
@@ -26,13 +31,16 @@ import com.example.rippleci.data.toUserGroupInvite
 import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.GroupVisibilityOptions
+import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.StudentCard
 import com.example.rippleci.ui.components.VisibilitySelector
+import com.example.rippleci.ui.components.createImageCaptureUri
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
+import com.google.firebase.storage.storage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,12 +49,14 @@ fun FriendsScreen(
     requestedSelectedTab: Int? = null,
     onSelectedTabRequestHandled: () -> Unit = {},
     onOpenConversation: (String, String) -> Unit = { _, _ -> },
-    onOpenUserProfile: (String) -> Unit = {},
+    onOpenUserProfile: (String, String) -> Unit = { _, _ -> },
     onOpenUserGroupProfile: (String) -> Unit = {},
     messagesViewModel: MessagesViewModel,
 ) {
     val db = Firebase.firestore
+    val storage = Firebase.storage
     val auth = Firebase.auth
+    val context = LocalContext.current
     val currentUserId = auth.currentUser?.uid ?: ""
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -72,7 +82,53 @@ fun FriendsScreen(
     var showCreateGroupDialog by remember { mutableStateOf(false) }
     var groupName by remember { mutableStateOf("") }
     var groupDescription by remember { mutableStateOf("") }
+    var groupProfilePictureUrl by remember { mutableStateOf("") }
+    var isUploadingGroupImage by remember { mutableStateOf(false) }
+    var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var groupVisibility by remember { mutableStateOf("public") }
+    var groupMembersCanInvite by remember { mutableStateOf(false) }
+    var groupAdminsCanManageInvites by remember { mutableStateOf(false) }
+    var blockedUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var blockedByUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val hiddenUserIds = blockedUserIds + blockedByUserIds
+
+    fun uploadNewGroupImage(uri: Uri) {
+        val uid = currentUserId
+        if (uid.isBlank()) return
+
+        isUploadingGroupImage = true
+
+        val storageRef =
+            storage.reference.child("group_pictures/drafts/$uid/${System.currentTimeMillis()}.jpg")
+
+        storageRef
+            .putFile(uri)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    groupProfilePictureUrl = downloadUrl.toString()
+                    isUploadingGroupImage = false
+                }
+            }.addOnFailureListener {
+                isUploadingGroupImage = false
+            }
+    }
+
+    val newGroupImagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let(::uploadNewGroupImage)
+        }
+
+    val newGroupCameraLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture(),
+        ) { didCapture ->
+            val uri = pendingGroupCameraUri
+            if (didCapture && uri != null) {
+                uploadNewGroupImage(uri)
+            }
+        }
 
     LaunchedEffect(requestedSelectedTab) {
         requestedSelectedTab?.let { tabIndex ->
@@ -81,26 +137,40 @@ fun FriendsScreen(
         }
     }
 
-    val filteredMajors = remember(majorQuery) {
-        if (majorQuery.isBlank()) emptyList()
-        else CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
-    }
+    val filteredMajors =
+        remember(majorQuery) {
+            if (majorQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+            }
+        }
 
-    val filteredClubs = remember(clubQuery) {
-        if (clubQuery.isBlank()) emptyList()
-        else CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
-    }
+    val filteredClubs =
+        remember(clubQuery) {
+            if (clubQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+            }
+        }
 
     LaunchedEffect(currentUserId) {
         currentUserId.let { uid ->
-            db.collection("users").document(uid)
+            db
+                .collection("users")
+                .document(uid)
                 .addSnapshotListener { doc, _ ->
                     currentUserName = doc?.getString("name").orEmpty()
-                    val ids = (doc?.get("friends") as? List<*>)
-                        ?.mapNotNull { it as? String } ?: emptyList()
+                    val ids =
+                        (doc?.get("friends") as? List<*>)
+                            ?.mapNotNull { it as? String } ?: emptyList()
                     friendIds = ids
                     if (ids.isNotEmpty()) {
-                        db.collection("users").whereIn("__name__", ids).get()
+                        db
+                            .collection("users")
+                            .whereIn("__name__", ids)
+                            .get()
                             .addOnSuccessListener { result ->
                                 friendProfiles = result.documents.map { it.toUserProfile() }
                             }
@@ -109,15 +179,42 @@ fun FriendsScreen(
                     }
                 }
 
-            db.collection("friendRequests")
+            db
+                .collection("blockedUsers")
+                .whereEqualTo("blockerUserId", uid)
+                .addSnapshotListener { snapshot, _ ->
+                    blockedUserIds =
+                        snapshot
+                            ?.documents
+                            ?.mapNotNull { it.getString("blockedUserId") }
+                            ?.toSet()
+                            ?: emptySet()
+                }
+
+            db
+                .collection("blockedUsers")
+                .whereEqualTo("blockedUserId", uid)
+                .addSnapshotListener { snapshot, _ ->
+                    blockedByUserIds =
+                        snapshot
+                            ?.documents
+                            ?.mapNotNull { it.getString("blockerUserId") }
+                            ?.toSet()
+                            ?: emptySet()
+                }
+
+            db
+                .collection("friendRequests")
                 .whereEqualTo("fromUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
-                    pendingRequestIds = snapshot?.documents
+                    pendingRequestIds = snapshot
+                        ?.documents
                         ?.mapNotNull { it.getString("toUserId") } ?: emptyList()
                 }
 
-            db.collection("friendRequests")
+            db
+                .collection("friendRequests")
                 .whereEqualTo("toUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
@@ -136,29 +233,33 @@ fun FriendsScreen(
                         .distinct()
                         .chunked(10)
                         .forEach { senderIds ->
-                            db.collection("users")
+                            db
+                                .collection("users")
                                 .whereIn("__name__", senderIds)
                                 .get()
                                 .addOnSuccessListener { result ->
                                     val fetchedNames =
                                         result.documents.associate { doc ->
-                                            doc.id to firstNameFromCandidates(
-                                                doc.getString("name"),
-                                                fallbackNames[doc.id],
-                                            )
+                                            doc.id to
+                                                firstNameFromCandidates(
+                                                    doc.getString("name"),
+                                                    fallbackNames[doc.id],
+                                                )
                                         }
                                     incomingRequestSenderNames = incomingRequestSenderNames + fetchedNames
                                 }
                         }
                 }
 
-            db.collection("userGroups")
+            db
+                .collection("userGroups")
                 .whereArrayContains("memberIds", uid)
                 .addSnapshotListener { snapshot, _ ->
                     userGroups = snapshot?.documents?.map { it.toUserGroupProfile() } ?: emptyList()
                 }
 
-            db.collection("userGroupInvites")
+            db
+                .collection("userGroupInvites")
                 .whereEqualTo("toUserId", uid)
                 .whereEqualTo("status", "pending")
                 .addSnapshotListener { snapshot, _ ->
@@ -170,7 +271,10 @@ fun FriendsScreen(
     fun acceptGroupInvite(invite: UserGroupInvite) {
         if (currentUserId.isBlank() || invite.id.isBlank()) return
         val inviteRef = db.collection("userGroupInvites").document(invite.id)
-        if (invite.groupId.isBlank()) { inviteRef.update("status", "expired"); return }
+        if (invite.groupId.isBlank()) {
+            inviteRef.update("status", "expired")
+            return
+        }
         val groupRef = db.collection("userGroups").document(invite.groupId)
         groupRef.get().addOnSuccessListener { groupDoc ->
             if (!groupDoc.exists()) {
@@ -180,10 +284,13 @@ fun FriendsScreen(
             }
             val batch = db.batch()
             batch.update(inviteRef, "status", "accepted")
-            batch.update(groupRef, mapOf(
-                "memberIds" to FieldValue.arrayUnion(currentUserId),
-                "invitedUserIds" to FieldValue.arrayRemove(currentUserId),
-            ))
+            batch.update(
+                groupRef,
+                mapOf(
+                    "memberIds" to FieldValue.arrayUnion(currentUserId),
+                    "invitedUserIds" to FieldValue.arrayRemove(currentUserId),
+                ),
+            )
             batch.commit()
         }
     }
@@ -191,10 +298,16 @@ fun FriendsScreen(
     fun declineGroupInvite(invite: UserGroupInvite) {
         if (currentUserId.isBlank() || invite.id.isBlank()) return
         val inviteRef = db.collection("userGroupInvites").document(invite.id)
-        if (invite.groupId.isBlank()) { inviteRef.update("status", "declined"); return }
+        if (invite.groupId.isBlank()) {
+            inviteRef.update("status", "declined")
+            return
+        }
         val groupRef = db.collection("userGroups").document(invite.groupId)
         groupRef.get().addOnSuccessListener { groupDoc ->
-            if (!groupDoc.exists()) { inviteRef.update("status", "declined"); return@addOnSuccessListener }
+            if (!groupDoc.exists()) {
+                inviteRef.update("status", "declined")
+                return@addOnSuccessListener
+            }
             val batch = db.batch()
             batch.update(inviteRef, "status", "declined")
             batch.update(groupRef, "invitedUserIds", FieldValue.arrayRemove(currentUserId))
@@ -205,52 +318,181 @@ fun FriendsScreen(
     fun createGroup() {
         val uid = currentUserId
         if (uid.isBlank() || groupName.isBlank()) return
-        db.collection("userGroups").add(mapOf(
-            "name" to groupName.trim(),
-            "description" to groupDescription.trim(),
-            "ownerUserId" to uid,
-            "memberIds" to listOf(uid),
-            "adminIds" to listOf(uid),
-            "visibility" to groupVisibility,
-            "createdAt" to System.currentTimeMillis(),
-        )).addOnSuccessListener {
-            groupName = ""
-            groupDescription = ""
-            groupVisibility = "public"
-            showCreateGroupDialog = false
-        }
+        if (isUploadingGroupImage) return
+        db
+            .collection("userGroups")
+            .add(
+                mapOf(
+                    "name" to groupName.trim(),
+                    "description" to groupDescription.trim(),
+                    "profilePictureUrl" to groupProfilePictureUrl.trim(),
+                    "ownerUserId" to uid,
+                    "memberIds" to listOf(uid),
+                    "adminIds" to listOf(uid),
+                    "visibility" to groupVisibility,
+                    "membersCanInvite" to groupMembersCanInvite,
+                    "adminsCanManageInvites" to groupAdminsCanManageInvites,
+                    "createdAt" to System.currentTimeMillis(),
+                ),
+            ).addOnSuccessListener {
+                groupName = ""
+                groupDescription = ""
+                groupProfilePictureUrl = ""
+                groupVisibility = "public"
+                groupMembersCanInvite = false
+                groupAdminsCanManageInvites = false
+                showCreateGroupDialog = false
+            }
     }
 
     fun runStudentSearch() {
         val query = searchQuery.trim().lowercase()
-        val hasCriteria = query.isNotBlank() || selectedMajor.isNotBlank() ||
+        val hasCriteria =
+            query.isNotBlank() || selectedMajor.isNotBlank() ||
                 selectedClub.isNotBlank() || selectedClass.isNotBlank()
-        if (!hasCriteria) { searchResults = emptyList(); return }
+        if (!hasCriteria) {
+            searchResults = emptyList()
+            return
+        }
         isSearching = true
-        db.collection("users").get()
+        db
+            .collection("users")
+            .get()
             .addOnSuccessListener { result ->
-                searchResults = result.documents
-                    .filter { doc ->
-                        if (doc.id == currentUserId) return@filter false
-                        val name = doc.getString("name").orEmpty()
-                        val email = doc.getString("email").orEmpty()
-                        val major = doc.getString("major").orEmpty()
-                        val clubs = (doc.get("clubs") as? List<*>)?.map { it.toString() } ?: emptyList()
-                        val classYear = doc.getString("classYear").orEmpty()
-                        val classes = (doc.get("classes") as? List<*>)?.map { it.toString() } ?: emptyList()
-                        val classValues = (classes + classYear).filter { it.isNotBlank() }
-                        val textMatch = query.isBlank() || name.lowercase().contains(query) ||
-                                email.lowercase().contains(query) || major.lowercase().contains(query) ||
-                                clubs.any { it.lowercase().contains(query) } ||
-                                classValues.any { it.lowercase().contains(query) }
-                        val majorMatch = selectedMajor.isBlank() || major == selectedMajor
-                        val clubMatch = selectedClub.isBlank() || clubs.any { it == selectedClub }
-                        val classMatch = selectedClass.isBlank() || classValues.any { it == selectedClass }
-                        textMatch && majorMatch && clubMatch && classMatch
-                    }.map { it.toUserProfile() }
-                    .filter { profile -> canViewProfile(profile, currentUserId, friendIds) }
+                searchResults =
+                    result.documents
+                        .filter { doc ->
+                            if (doc.id == currentUserId) return@filter false
+                            val name = doc.getString("name").orEmpty()
+                            val email = doc.getString("email").orEmpty()
+                            val major = doc.getString("major").orEmpty()
+                            val clubs = (doc.get("clubs") as? List<*>)?.map { it.toString() } ?: emptyList()
+                            val classYear = doc.getString("classYear").orEmpty()
+                            val classes = (doc.get("classes") as? List<*>)?.map { it.toString() } ?: emptyList()
+                            val classValues = (classes + classYear).filter { it.isNotBlank() }
+                            val textMatch =
+                                query.isBlank() || name.lowercase().contains(query) ||
+                                    email.lowercase().contains(query) || major.lowercase().contains(query) ||
+                                    clubs.any { it.lowercase().contains(query) } ||
+                                    classValues.any { it.lowercase().contains(query) }
+                            val majorMatch = selectedMajor.isBlank() || major == selectedMajor
+                            val clubMatch = selectedClub.isBlank() || clubs.any { it == selectedClub }
+                            val classMatch = selectedClass.isBlank() || classValues.any { it == selectedClass }
+                            textMatch && majorMatch && clubMatch && classMatch
+                        }.map { it.toUserProfile() }
+                        .filter { profile -> profile.id !in hiddenUserIds }
+                        .filter { profile -> canViewProfile(profile, currentUserId, friendIds) }
                 isSearching = false
             }.addOnFailureListener { isSearching = false }
+    }
+
+    fun sendFriendRequest(user: UserProfile) {
+        val uid = currentUserId
+        if (uid.isBlank() || user.id.isBlank()) return
+
+        val request =
+            hashMapOf(
+                "fromUserId" to uid,
+                "fromUserName" to
+                    firstNameFromCandidates(
+                        currentUserName,
+                        auth.currentUser?.displayName,
+                    ),
+                "toUserId" to user.id,
+                "status" to "pending",
+                "timestamp" to System.currentTimeMillis(),
+            )
+
+        db.collection("friendRequests").add(request)
+    }
+
+    fun removeFriend(userIdToRemove: String) {
+        val uid = currentUserId
+        if (uid.isBlank() || userIdToRemove.isBlank()) return
+
+        db
+            .collection("users")
+            .document(uid)
+            .update("friends", FieldValue.arrayRemove(userIdToRemove))
+        db
+            .collection("users")
+            .document(userIdToRemove)
+            .update("friends", FieldValue.arrayRemove(uid))
+
+        val conversationId = listOf(uid, userIdToRemove).sorted().joinToString("_")
+        val convRef = db.collection("conversations").document(conversationId)
+        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
+            val batch = db.batch()
+            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
+            batch.commit().addOnSuccessListener { convRef.delete() }
+        }
+    }
+
+    fun blockUser(user: UserProfile) {
+        val uid = currentUserId
+        if (uid.isBlank() || user.id.isBlank()) return
+
+        val outgoingRequests =
+            db
+                .collection("friendRequests")
+                .whereEqualTo("fromUserId", uid)
+                .whereEqualTo("toUserId", user.id)
+
+        val incomingRequests =
+            db
+                .collection("friendRequests")
+                .whereEqualTo("fromUserId", user.id)
+                .whereEqualTo("toUserId", uid)
+
+        outgoingRequests
+            .get()
+            .addOnSuccessListener { outgoing ->
+                incomingRequests
+                    .get()
+                    .addOnSuccessListener { incoming ->
+                        val batch = db.batch()
+                        val blockRef =
+                            db
+                                .collection("blockedUsers")
+                                .document(blockDocumentId(uid, user.id))
+
+                        batch.set(
+                            blockRef,
+                            mapOf(
+                                "blockerUserId" to uid,
+                                "blockedUserId" to user.id,
+                                "blockedUserName" to user.name,
+                                "createdAt" to System.currentTimeMillis(),
+                            ),
+                        )
+                        batch.update(db.collection("users").document(uid), "friends", FieldValue.arrayRemove(user.id))
+                        batch.update(db.collection("users").document(user.id), "friends", FieldValue.arrayRemove(uid))
+                        (outgoing.documents + incoming.documents).forEach { requestDoc ->
+                            batch.delete(requestDoc.reference)
+                        }
+
+                        batch.commit().addOnSuccessListener {
+                            blockedUserIds = blockedUserIds + user.id
+                            friendIds = friendIds.filterNot { it == user.id }
+                            friendProfiles = friendProfiles.filterNot { it.id == user.id }
+                            searchResults = searchResults.filterNot { it.id == user.id }
+                            pendingRequestIds = pendingRequestIds.filterNot { it == user.id }
+                        }
+                    }
+            }
+    }
+
+    fun unblockUser(userIdToUnblock: String) {
+        val uid = currentUserId
+        if (uid.isBlank() || userIdToUnblock.isBlank()) return
+
+        db
+            .collection("blockedUsers")
+            .document(blockDocumentId(uid, userIdToUnblock))
+            .delete()
+            .addOnSuccessListener {
+                blockedUserIds = blockedUserIds - userIdToUnblock
+            }
     }
 
     if (showCreateGroupDialog) {
@@ -273,16 +515,60 @@ fun FriendsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(12.dp))
+                    ImageUploadControls(
+                        imageUrl = groupProfilePictureUrl,
+                        isUploading = isUploadingGroupImage,
+                        onChooseFromLibrary = { newGroupImagePickerLauncher.launch("image/*") },
+                        onUseCamera = {
+                            val uri = createImageCaptureUri(context, "group_images")
+                            pendingGroupCameraUri = uri
+                            newGroupCameraLauncher.launch(uri)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     VisibilitySelector(
                         title = "Group Visibility",
                         selectedValue = groupVisibility,
                         options = GroupVisibilityOptions,
                         onValueChange = { groupVisibility = it },
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Members can invite friends",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = groupMembersCanInvite,
+                            onCheckedChange = { groupMembersCanInvite = it },
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Admins can manage invites",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = groupAdminsCanManageInvites,
+                            onCheckedChange = { groupAdminsCanManageInvites = it },
+                        )
+                    }
                 }
             },
             confirmButton = {
-                Button(onClick = { createGroup() }, enabled = groupName.isNotBlank()) {
+                Button(onClick = { createGroup() }, enabled = groupName.isNotBlank() && !isUploadingGroupImage) {
                     Text("Create")
                 }
             },
@@ -303,21 +589,48 @@ fun FriendsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             TabRow(selectedTabIndex = selectedTab) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },
-                    text = { Text("My Friends (${friendIds.size})") })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
-                    text = { Text("Requests (${incomingRequests.size})") })
-                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 },
-                    text = { Text("Groups (${userGroups.size})") })
-                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 },
-                    text = { Text("Find Students") })
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("My Friends (${friendIds.size})") },
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("Requests (${incomingRequests.size})") },
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Groups (${userGroups.size})")
+                            if (pendingGroupInvites.isNotEmpty()) {
+                                Text(
+                                    "Invites (${pendingGroupInvites.size})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    },
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    text = { Text("Find Students") },
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             when (selectedTab) {
                 0 -> {
-                    if (friendProfiles.isEmpty()) {
+                    val visibleFriendProfiles =
+                        friendProfiles.filter { friend ->
+                            friend.id != currentUserId && friend.id !in hiddenUserIds
+                        }
+
+                    if (visibleFriendProfiles.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
                                 "No friends yet!\nSearch for students to add.",
@@ -327,29 +640,18 @@ fun FriendsScreen(
                         }
                     } else {
                         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            friendProfiles.filter { it.id != currentUserId }.forEach { user ->
+                            visibleFriendProfiles.forEach { user ->
                                 StudentCard(
                                     user = user,
                                     isFriend = true,
                                     isPending = false,
-                                    onViewProfile = { onOpenUserProfile(user.id) },
-                                    onAddFriend = {},
-                                    onRemoveFriend = {
-                                        val uid = currentUserId
-                                        // Remove from both users' friend lists
-                                        db.collection("users").document(uid)
-                                            .update("friends", FieldValue.arrayRemove(user.id))
-                                        db.collection("users").document(user.id)
-                                            .update("friends", FieldValue.arrayRemove(uid))
-                                        // Delete DM conversation and all messages
-                                        val conversationId = listOf(uid, user.id).sorted().joinToString("_")
-                                        val convRef = db.collection("conversations").document(conversationId)
-                                        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
-                                            val batch = db.batch()
-                                            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
-                                            batch.commit().addOnSuccessListener { convRef.delete() }
-                                        }
+                                    onViewProfile = {
+                                        onOpenUserProfile(user.id, user.name.ifBlank { user.email })
                                     },
+                                    onAddFriend = { sendFriendRequest(user) },
+                                    onRemoveFriend = { removeFriend(user.id) },
+                                    onBlockUser = { blockUser(user) },
+                                    onUnblockUser = { unblockUser(user.id) },
                                     onMessage = {
                                         val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
                                         messagesViewModel.getOrCreateDMConversation(
@@ -404,21 +706,26 @@ fun FriendsScreen(
                                             val batch = db.batch()
                                             batch.update(
                                                 db.collection("friendRequests").document(request.id),
-                                                "status", "accepted"
+                                                "status",
+                                                "accepted",
                                             )
                                             batch.update(
                                                 db.collection("users").document(uid),
-                                                "friends", FieldValue.arrayUnion(request.fromUserId)
+                                                "friends",
+                                                FieldValue.arrayUnion(request.fromUserId),
                                             )
                                             batch.update(
                                                 db.collection("users").document(request.fromUserId),
-                                                "friends", FieldValue.arrayUnion(uid)
+                                                "friends",
+                                                FieldValue.arrayUnion(uid),
                                             )
                                             batch.commit()
                                         }) { Text("Accept") }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         OutlinedButton(onClick = {
-                                            db.collection("friendRequests").document(request.id)
+                                            db
+                                                .collection("friendRequests")
+                                                .document(request.id)
                                                 .update("status", "denied")
                                         }) { Text("Deny") }
                                     }
@@ -486,10 +793,11 @@ fun FriendsScreen(
 
                 3 -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp),
                     ) {
                         OutlinedTextField(
                             value = searchQuery,
@@ -509,13 +817,17 @@ fun FriendsScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = majorQuery,
-                                onValueChange = { majorQuery = it; selectedMajor = "" },
+                                onValueChange = {
+                                    majorQuery = it
+                                    selectedMajor = ""
+                                },
                                 label = { Text("Major") },
                                 placeholder = { Text("Any major") },
                                 isError = majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty(),
                                 supportingText = {
-                                    if (majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty())
+                                    if (majorQuery.isNotBlank() && selectedMajor.isEmpty() && filteredMajors.isEmpty()) {
                                         Text("No matching major found")
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
@@ -529,7 +841,10 @@ fun FriendsScreen(
                                 filteredMajors.forEach { major ->
                                     DropdownMenuItem(
                                         text = { Text(major) },
-                                        onClick = { selectedMajor = major; majorQuery = major },
+                                        onClick = {
+                                            selectedMajor = major
+                                            majorQuery = major
+                                        },
                                     )
                                 }
                             }
@@ -540,13 +855,17 @@ fun FriendsScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = clubQuery,
-                                onValueChange = { clubQuery = it; selectedClub = "" },
+                                onValueChange = {
+                                    clubQuery = it
+                                    selectedClub = ""
+                                },
                                 label = { Text("Club") },
                                 placeholder = { Text("Any club") },
                                 isError = clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty(),
                                 supportingText = {
-                                    if (clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty())
+                                    if (clubQuery.isNotBlank() && selectedClub.isEmpty() && filteredClubs.isEmpty()) {
                                         Text("No matching club found")
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
@@ -560,7 +879,10 @@ fun FriendsScreen(
                                 filteredClubs.forEach { club ->
                                     DropdownMenuItem(
                                         text = { Text(club) },
-                                        onClick = { selectedClub = club; clubQuery = club },
+                                        onClick = {
+                                            selectedClub = club
+                                            clubQuery = club
+                                        },
                                     )
                                 }
                             }
@@ -588,12 +910,18 @@ fun FriendsScreen(
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("Any year") },
-                                    onClick = { selectedClass = ""; classExpanded = false },
+                                    onClick = {
+                                        selectedClass = ""
+                                        classExpanded = false
+                                    },
                                 )
                                 CsuciClassYears.forEach { classYear ->
                                     DropdownMenuItem(
                                         text = { Text(classYear) },
-                                        onClick = { selectedClass = classYear; classExpanded = false },
+                                        onClick = {
+                                            selectedClass = classYear
+                                            classExpanded = false
+                                        },
                                     )
                                 }
                             }
@@ -607,55 +935,43 @@ fun FriendsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        val hasCriteria = searchQuery.isNotBlank() || selectedMajor.isNotBlank() ||
+                        val hasCriteria =
+                            searchQuery.isNotBlank() || selectedMajor.isNotBlank() ||
                                 selectedClub.isNotBlank() || selectedClass.isNotBlank()
+                        val visibleSearchResults =
+                            searchResults.filter { user -> user.id !in hiddenUserIds }
 
                         if (isSearching) {
                             CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                        } else if (searchResults.isEmpty() && hasCriteria) {
+                        } else if (visibleSearchResults.isEmpty() && hasCriteria) {
                             Text("No students found", color = MaterialTheme.colorScheme.secondary)
                         } else {
-                            searchResults.forEach { user ->
+                            visibleSearchResults.forEach { user ->
                                 val friendName = user.name.ifBlank { user.email.ifBlank { "Unknown" } }
+                                val canMessageUser =
+                                    friendIds.contains(user.id) || user.messagePrivacy == MESSAGE_PRIVACY_EVERYONE
                                 StudentCard(
                                     user = user,
                                     isFriend = friendIds.contains(user.id),
                                     isPending = pendingRequestIds.contains(user.id),
-                                    onViewProfile = { onOpenUserProfile(user.id) },
-                                    onAddFriend = {
-                                        val uid = currentUserId
-                                        val request = hashMapOf(
-                                            "fromUserId" to uid,
-                                            "fromUserName" to firstNameFromCandidates(
-                                                currentUserName,
-                                                auth.currentUser?.displayName,
-                                            ),
-                                            "toUserId" to user.id,
-                                            "status" to "pending",
-                                            "timestamp" to System.currentTimeMillis(),
-                                        )
-                                        db.collection("friendRequests").add(request)
+                                    onViewProfile = {
+                                        onOpenUserProfile(user.id, user.name.ifBlank { user.email })
                                     },
-                                    onRemoveFriend = {
-                                        val uid = currentUserId
-                                        db.collection("users").document(uid)
-                                            .update("friends", FieldValue.arrayRemove(user.id))
-                                        db.collection("users").document(user.id)
-                                            .update("friends", FieldValue.arrayRemove(uid))
-                                        val conversationId = listOf(uid, user.id).sorted().joinToString("_")
-                                        val convRef = db.collection("conversations").document(conversationId)
-                                        convRef.collection("messages").get().addOnSuccessListener { snapshot ->
-                                            val batch = db.batch()
-                                            snapshot.documents.forEach { doc -> batch.delete(doc.reference) }
-                                            batch.commit().addOnSuccessListener { convRef.delete() }
-                                        }
-                                    },
-                                    onMessage = {
-                                        messagesViewModel.getOrCreateDMConversation(
-                                            otherUserId = user.id,
-                                            otherUserName = friendName,
-                                        ) { convId -> onOpenConversation(convId, friendName) }
-                                    },
+                                    onAddFriend = { sendFriendRequest(user) },
+                                    onRemoveFriend = { removeFriend(user.id) },
+                                    onBlockUser = { blockUser(user) },
+                                    onUnblockUser = { unblockUser(user.id) },
+                                    onMessage =
+                                        if (canMessageUser) {
+                                            {
+                                                messagesViewModel.getOrCreateDMConversation(
+                                                    otherUserId = user.id,
+                                                    otherUserName = friendName,
+                                                ) { convId -> onOpenConversation(convId, friendName) }
+                                            }
+                                        } else {
+                                            null
+                                        },
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -666,3 +982,8 @@ fun FriendsScreen(
         }
     }
 }
+
+private fun blockDocumentId(
+    blockerUserId: String,
+    blockedUserId: String,
+): String = "${blockerUserId}_$blockedUserId"

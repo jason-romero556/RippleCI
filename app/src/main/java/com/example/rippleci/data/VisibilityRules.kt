@@ -16,9 +16,20 @@ fun canViewEvent(
     event: PersonalEvent,
     currentUserId: String,
     currentUserFriendIds: List<String>,
-): Boolean =
-    event.ownerUserId == currentUserId ||
-        event.createdByUserId == currentUserId ||
+): Boolean {
+    val canManageEvent =
+        event.ownerUserId == currentUserId ||
+            event.createdByUserId == currentUserId
+
+    if (!canManageEvent && event.blockedUserIds.contains(currentUserId)) {
+        return false
+    }
+
+    return canManageEvent ||
         event.visibility == "public" ||
         (event.visibility == "friends" && currentUserFriendIds.contains(event.ownerUserId)) ||
-        (event.visibility == "attendees" && event.attendeeIds.contains(currentUserId))
+        (
+            event.visibility == "attendees" &&
+                (event.attendeeIds.contains(currentUserId) || event.invitedUserIds.contains(currentUserId))
+        )
+}

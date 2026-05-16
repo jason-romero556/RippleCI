@@ -1,7 +1,10 @@
 package com.example.rippleci.ui.screens
 
 import android.os.Build
+import android.net.Uri
 import android.widget.NumberPicker
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,10 +21,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -30,38 +36,64 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.ui.components.EventVisibilityOptions
+import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.VisibilitySelector
+import com.example.rippleci.ui.components.createImageCaptureUri
+import com.google.firebase.Firebase
+import com.google.firebase.storage.storage
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-
-private val CalendarRed = Color(0xFFB3261E)
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePersonalEventScreen(
+    initialEvent: PersonalEvent? = null,
+    saveButtonText: String = if (initialEvent == null) "Save Event" else "Save Changes",
     onSave: (PersonalEvent) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
-    var selectedStartMinutes by remember { mutableStateOf<Int?>(null) }
-    var selectedEndMinutes by remember { mutableStateOf<Int?>(null) }
+    val context = LocalContext.current
+    val storage = Firebase.storage
+    val imageStorageKey =
+        remember(initialEvent?.id) {
+            initialEvent?.id?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        }
+
+    var title by remember(initialEvent?.id) { mutableStateOf(initialEvent?.title.orEmpty()) }
+    var description by remember(initialEvent?.id) { mutableStateOf(initialEvent?.description.orEmpty()) }
+    var location by remember(initialEvent?.id) { mutableStateOf(initialEvent?.location.orEmpty()) }
+    var imageUrl by remember(initialEvent?.id) { mutableStateOf(initialEvent?.imageUrl.orEmpty()) }
+    var isUploadingImage by remember { mutableStateOf(false) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedDateMillis by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.startAtMillis?.takeIf { it > 0L }?.let(::localDateStartMillis))
+    }
+    var selectedStartMinutes by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.startAtMillis?.takeIf { it > 0L }?.let(::minutesOfDay))
+    }
+    var selectedEndMinutes by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.endAtMillis?.takeIf { it > 0L }?.let(::minutesOfDay))
+    }
     var showDateDialog by remember { mutableStateOf(false) }
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
-    var visibility by remember { mutableStateOf("public") }
+    var visibility by remember(initialEvent?.id) { mutableStateOf(initialEvent?.visibility ?: "public") }
+    var inviteesCanInvite by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.inviteesCanInvite ?: false)
+    }
     var statusMessage by remember { mutableStateOf("") }
 
     val dateLabel = selectedDateMillis?.let { formatEventDate(it) } ?: "Select date"
@@ -75,42 +107,116 @@ fun CreatePersonalEventScreen(
             selectedStartMinutes != null &&
             selectedEndMinutes != null
 
+    fun uploadEventImage(uri: Uri) {
+        isUploadingImage = true
+        statusMessage = ""
+
+        val storageRef =
+            storage.reference.child("event_images/$imageStorageKey/${System.currentTimeMillis()}.jpg")
+
+        storageRef
+            .putFile(uri)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
+                    imageUrl = downloadUrl.toString()
+                    isUploadingImage = false
+                }
+            }.addOnFailureListener { error ->
+                isUploadingImage = false
+                statusMessage = "Image upload failed: ${error.message}"
+            }
+    }
+
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri: Uri? ->
+            uri?.let(::uploadEventImage)
+        }
+
+    val cameraLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture(),
+        ) { didCapture ->
+            val uri = pendingCameraUri
+            if (didCapture && uri != null) {
+                uploadEventImage(uri)
+            } else {
+                statusMessage = "No photo captured."
+            }
+        }
+
     if (showDateDialog) {
+        val colorScheme = MaterialTheme.colorScheme
+        val baseTypography = MaterialTheme.typography
+        val calendarTypography =
+            baseTypography.copy(
+                titleLarge = baseTypography.titleLarge.copy(shadow = null),
+                titleMedium = baseTypography.titleMedium.copy(shadow = null),
+                bodyLarge = baseTypography.bodyLarge.copy(shadow = null),
+                bodyMedium = baseTypography.bodyMedium.copy(shadow = null),
+                bodySmall = baseTypography.bodySmall.copy(shadow = null),
+                labelLarge = baseTypography.labelLarge.copy(shadow = null),
+            )
+
         val datePickerState =
             rememberDatePickerState(
                 initialSelectedDateMillis =
                     datePickerLocalDateMillisToUtcMillis(
                         selectedDateMillis ?: System.currentTimeMillis(),
                     ),
+                initialDisplayMode = DisplayMode.Picker,
             )
 
-        AlertDialog(
-            onDismissRequest = { showDateDialog = false },
-            title = { Text("Select date") },
-            text = {
-                DatePicker(
-                    state = datePickerState,
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = calendarTypography,
+        ) {
+            DatePickerDialog(
+                onDismissRequest = { showDateDialog = false },
+                colors =
+                    DatePickerDefaults.colors(
+                        containerColor = colorScheme.surface,
+                        titleContentColor = colorScheme.onSurface,
+                        headlineContentColor = colorScheme.onSurface,
+                        navigationContentColor = colorScheme.primary,
+                        selectedDayContainerColor = colorScheme.primary,
+                        selectedDayContentColor = colorScheme.onPrimary,
+                        todayContentColor = colorScheme.primary,
+                        todayDateBorderColor = colorScheme.primary,
+                        selectedYearContainerColor = colorScheme.primary,
+                        selectedYearContentColor = colorScheme.onPrimary,
+                    ),
+                confirmButton = {
+                    Button(onClick = {
                         datePickerState.selectedDateMillis?.let { utcMillis ->
                             selectedDateMillis = datePickerUtcMillisToLocalDateMillis(utcMillis)
                         }
                         showDateDialog = false
                         statusMessage = ""
-                    },
-                ) {
-                    Text("Done")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDateDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
+                    }) {
+                        Text("Done")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDateDialog = false }) {
+                        Text("Cancel")
+                    }
+                },
+            ) {
+                DatePicker(
+                    state = datePickerState,
+                    showModeToggle = false,
+                    colors =
+                        DatePickerDefaults.colors(
+                            selectedDayContainerColor = colorScheme.primary,
+                            selectedDayContentColor = colorScheme.onPrimary,
+                            todayContentColor = colorScheme.primary,
+                            todayDateBorderColor = colorScheme.primary,
+                        ),
+                )
+            }
+        }
     }
 
     if (showStartTimeDialog) {
@@ -176,6 +282,20 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        ImageUploadControls(
+            imageUrl = imageUrl,
+            isUploading = isUploadingImage,
+            onChooseFromLibrary = { imagePickerLauncher.launch("image/*") },
+            onUseCamera = {
+                val uri = createImageCaptureUri(context, "event_images")
+                pendingCameraUri = uri
+                cameraLauncher.launch(uri)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedButton(
             onClick = { showDateDialog = true },
             modifier = Modifier.fillMaxWidth(),
@@ -210,6 +330,24 @@ fun CreatePersonalEventScreen(
             onValueChange = { visibility = it },
         )
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Invitees can invite friends",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = inviteesCanInvite,
+                onCheckedChange = { inviteesCanInvite = it },
+            )
+        }
+
         if (statusMessage.isNotBlank()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(statusMessage, color = MaterialTheme.colorScheme.error)
@@ -219,6 +357,11 @@ fun CreatePersonalEventScreen(
 
         Button(
             onClick = {
+                if (isUploadingImage) {
+                    statusMessage = "Wait for the image upload to finish."
+                    return@Button
+                }
+
                 val startMillis = startAtMillis
                 val endMillis = endAtMillis
                 val nowMillis = System.currentTimeMillis()
@@ -239,7 +382,9 @@ fun CreatePersonalEventScreen(
                     else -> {
                         onSave(
                             PersonalEvent(
+                                id = initialEvent?.id.orEmpty(),
                                 title = title.trim(),
+                                ownerUserId = initialEvent?.ownerUserId.orEmpty(),
                                 description = description.trim(),
                                 location = location.trim(),
                                 date = formatEventDate(startMillis),
@@ -248,15 +393,22 @@ fun CreatePersonalEventScreen(
                                 startAtMillis = startMillis,
                                 endAtMillis = endMillis,
                                 visibility = visibility,
+                                groupId = initialEvent?.groupId.orEmpty(),
+                                createdByUserId = initialEvent?.createdByUserId.orEmpty(),
+                                attendeeIds = initialEvent?.attendeeIds.orEmpty(),
+                                invitedUserIds = initialEvent?.invitedUserIds.orEmpty(),
+                                inviteesCanInvite = inviteesCanInvite,
+                                blockedUserIds = initialEvent?.blockedUserIds.orEmpty(),
+                                imageUrl = imageUrl.trim(),
                             ),
                         )
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = canAttemptSave,
+            enabled = canAttemptSave && !isUploadingImage,
         ) {
-            Text("Save Event")
+            Text(saveButtonText)
         }
 
         OutlinedButton(
@@ -343,10 +495,11 @@ private fun WheelNumberPicker(
                 .width(92.dp)
                 .height(160.dp),
         factory = { context ->
-            val themedContext = android.view.ContextThemeWrapper(
-                context,
-                if (isDark) android.R.style.Theme_DeviceDefault_Dialog else android.R.style.Theme_DeviceDefault_Light_Dialog
-            )
+            val themedContext =
+                android.view.ContextThemeWrapper(
+                    context,
+                    if (isDark) android.R.style.Theme_DeviceDefault_Dialog else android.R.style.Theme_DeviceDefault_Light_Dialog,
+                )
             NumberPicker(themedContext).apply {
                 wrapSelectorWheel = true
                 this.minValue = minValue
@@ -376,6 +529,22 @@ private fun WheelNumberPicker(
         },
     )
 }
+
+private fun localDateStartMillis(millis: Long): Long =
+    Calendar
+        .getInstance()
+        .apply {
+            timeInMillis = millis
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+private fun minutesOfDay(millis: Long): Int =
+    Calendar.getInstance().apply { timeInMillis = millis }.let {
+        it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)
+    }
 
 private fun combineEventMillis(
     dateMillis: Long?,
@@ -462,8 +631,7 @@ private fun datePickerLocalDateMillisToUtcMillis(localMillis: Long): Long {
         }.timeInMillis
 }
 
-private fun formatEventDate(millis: Long): String =
-    SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
+private fun formatEventDate(millis: Long): String = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(millis))
 
 private fun formatEventTime(minutes: Int): String {
     val calendar =

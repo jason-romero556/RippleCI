@@ -5,6 +5,7 @@ sealed class AppRoute {
 
     data class UserProfile(
         val userId: String,
+        val displayName: String = "",
     ) : AppRoute()
 
     data class ClubProfile(

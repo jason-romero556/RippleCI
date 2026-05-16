@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,7 +18,11 @@ import androidx.core.text.HtmlCompat
 import com.example.rippleci.data.models.SchoolEvent
 
 @Composable
-fun EventCard(event: SchoolEvent) {
+fun EventCard(
+    event: SchoolEvent,
+    isMarkedAttending: Boolean = false,
+    onToggleAttendance: (() -> Unit)? = null,
+) {
     var isExpanded by remember { mutableStateOf(false) }
 
     val dateParts = event.dateTimeFormatted.split(",")
@@ -52,11 +57,25 @@ fun EventCard(event: SchoolEvent) {
                         HtmlCompat.FROM_HTML_MODE_COMPACT,
                     ).toString()
 
-            Text(
-                text = cleanTitle,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = cleanTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+
+                if (isMarkedAttending) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Marked attending",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -112,6 +131,26 @@ fun EventCard(event: SchoolEvent) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
+
+                    if (onToggleAttendance != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (isMarkedAttending) {
+                            OutlinedButton(
+                                onClick = onToggleAttendance,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Remove from My Events")
+                            }
+                        } else {
+                            Button(
+                                onClick = onToggleAttendance,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("I'm Attending")
+                            }
+                        }
+                    }
                 }
             }
         }

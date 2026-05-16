@@ -4,6 +4,7 @@ data class EventInvite(
     val id: String = "",
     val eventId: String = "",
     val ownerUserId: String = "",
+    val groupId: String = "",
     val fromUserId: String = "",
     val toUserId: String = "",
     val eventTitle: String = "",

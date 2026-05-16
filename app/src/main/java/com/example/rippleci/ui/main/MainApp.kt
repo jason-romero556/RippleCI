@@ -1,5 +1,13 @@
 package com.example.rippleci.ui.main
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +29,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -59,24 +72,37 @@ fun MainApp(
     val currentUserId = Firebase.auth.currentUser?.uid ?: "logged_out"
     val messagesViewModel: MessagesViewModel = viewModel(key = "messages_$currentUserId")
     var routeStack by remember { mutableStateOf<List<AppRoute>>(emptyList()) }
+    var profileTitlesByUserId by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var isBackNavigation by remember { mutableStateOf(false) }
     var requestedFriendsTab by remember { mutableStateOf<Int?>(null) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     val route = routeStack.lastOrNull() ?: AppRoute.MainTabs
 
     fun navigateTo(nextRoute: AppRoute) {
+        isBackNavigation = false
         routeStack = routeStack + nextRoute
     }
 
+    fun navigateToUserProfile(
+        userId: String,
+        displayName: String = "",
+    ) {
+        navigateTo(AppRoute.UserProfile(userId, displayName))
+    }
+
     fun popRoute() {
+        isBackNavigation = true
         routeStack = routeStack.dropLast(1)
     }
 
     fun resetToTabs() {
+        isBackNavigation = false
         routeStack = emptyList()
     }
 
     LaunchedEffect(notificationNavigationTarget) {
         val target = notificationNavigationTarget ?: return@LaunchedEffect
+        isBackNavigation = false
 
         when (target.navigateTo) {
             "friends" -> {
@@ -199,15 +225,41 @@ fun MainApp(
                         }
                     }
 
-                    val title = when (val currentRoute = route) {
-                        is AppRoute.Conversation -> currentRoute.title
-                        is AppRoute.Events -> "Events"
-                        is AppRoute.UserProfile -> "User Profile"
-                        is AppRoute.ClubProfile -> "Club Profile"
-                        is AppRoute.UserGroupProfile -> "Group Profile"
-                        is AppRoute.EventProfile -> "Event Profile"
-                        AppRoute.MainTabs -> currentDestination.label
-                    }
+                    val title =
+                        when (val currentRoute = route) {
+                            is AppRoute.Conversation -> {
+                                currentRoute.title
+                            }
+
+                            is AppRoute.Events -> {
+                                "Events"
+                            }
+
+                            is AppRoute.UserProfile -> {
+                                val displayName =
+                                    profileTitlesByUserId[currentRoute.userId]
+                                        .orEmpty()
+                                        .ifBlank { currentRoute.displayName }
+
+                                if (displayName.isBlank()) "User Profile" else "$displayName's Profile"
+                            }
+
+                            is AppRoute.ClubProfile -> {
+                                "Club Profile"
+                            }
+
+                            is AppRoute.UserGroupProfile -> {
+                                "Group Profile"
+                            }
+
+                            is AppRoute.EventProfile -> {
+                                "Event Profile"
+                            }
+
+                            AppRoute.MainTabs -> {
+                                currentDestination.label
+                            }
+                        }
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleLarge,
@@ -218,9 +270,10 @@ fun MainApp(
                     if (route is AppRoute.Conversation) {
                         IconButton(
                             onClick = { showClearChatDialog = true },
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 8.dp),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 8.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -261,8 +314,8 @@ fun MainApp(
                         when (currentDestination) {
                             AppDestinations.HOME -> {
                                 HomeScreen(
-                                    onOpenEventProfile = { ownerUserId, eventId ->
-                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId))
+                                    onOpenEventProfile = { ownerUserId, eventId, groupId ->
+                                        navigateTo(AppRoute.EventProfile(eventId, ownerUserId, groupId))
                                     },
                                     onAddEvent = { navigateTo(AppRoute.Events) },
                                 )
@@ -281,8 +334,8 @@ fun MainApp(
                                     onOpenConversation = { conversationId, convName ->
                                         navigateTo(AppRoute.Conversation(conversationId, convName))
                                     },
-                                    onOpenUserProfile = { userId ->
-                                        navigateTo(AppRoute.UserProfile(userId))
+                                    onOpenUserProfile = { userId, displayName ->
+                                        navigateToUserProfile(userId, displayName)
                                     },
                                     onOpenUserGroupProfile = { groupId ->
                                         navigateTo(AppRoute.UserGroupProfile(groupId))
@@ -321,11 +374,12 @@ fun MainApp(
 
                 is AppRoute.Events -> {
                     EventsScreen(
-                        onOpenEventProfile = { ownerUserId, eventId ->
+                        onOpenEventProfile = { ownerUserId, eventId, groupId ->
                             navigateTo(
                                 AppRoute.EventProfile(
-                                    eventId,
-                                    ownerUserId,
+                                    eventId = eventId,
+                                    ownerUserId = ownerUserId,
+                                    groupId = groupId,
                                 ),
                             )
                         },
@@ -342,24 +396,50 @@ fun MainApp(
                 }
 
                 is AppRoute.UserProfile -> {
-                    UserProfileScreen(
-                        userId = currentRoute.userId,
-                        onBack = { popRoute() },
-                        onOpenUserProfile = { userId ->
-                            navigateTo(AppRoute.UserProfile(userId))
+                    AnimatedContent(
+                        targetState = currentRoute,
+                        label = "UserProfileTransition",
+                        transitionSpec = {
+                            val direction = if (isBackNavigation) -1 else 1
+
+                            (
+                                slideInHorizontally(animationSpec = tween(220)) { width -> direction * width / 4 } +
+                                    fadeIn(animationSpec = tween(220))
+                            ).togetherWith(
+                                slideOutHorizontally(animationSpec = tween(180)) { width -> -direction * width / 4 } +
+                                    fadeOut(animationSpec = tween(180)),
+                            ).using(SizeTransform(clip = false))
                         },
-                        onOpenClubProfile = { clubId ->
-                            navigateTo(AppRoute.ClubProfile(clubId))
-                        },
-                        onOpenEventProfile = { eventId ->
-                            navigateTo(
-                                AppRoute.EventProfile(
-                                    eventId = eventId,
-                                    ownerUserId = currentRoute.userId,
-                                ),
-                            )
-                        },
-                    )
+                    ) { profileRoute ->
+                        UserProfileScreen(
+                            userId = profileRoute.userId,
+                            onBack = { popRoute() },
+                            onProfileLoaded = { loadedUserId, loadedName ->
+                                if (loadedName.isNotBlank()) {
+                                    profileTitlesByUserId = profileTitlesByUserId + (loadedUserId to loadedName)
+                                }
+                            },
+                            onOpenConversation = { conversationId, conversationName ->
+                                navigateTo(AppRoute.Conversation(conversationId, conversationName))
+                            },
+                            onOpenUserProfile = { userId, displayName ->
+                                navigateToUserProfile(userId, displayName)
+                            },
+                            onOpenClubProfile = { clubId ->
+                                navigateTo(AppRoute.ClubProfile(clubId))
+                            },
+                            onOpenEventProfile = { eventId, eventOwnerUserId, eventGroupId ->
+                                navigateTo(
+                                    AppRoute.EventProfile(
+                                        eventId = eventId,
+                                        ownerUserId = eventOwnerUserId,
+                                        groupId = eventGroupId,
+                                    ),
+                                )
+                            },
+                            messagesViewModel = messagesViewModel,
+                        )
+                    }
                 }
 
                 is AppRoute.ClubProfile -> {
@@ -371,7 +451,7 @@ fun MainApp(
                         onLeaveClub = { /* Handle leave club logic */ },
                         onViewEvents = { /* Handle view events logic */ },
                         onOpenUserProfile = { userId ->
-                            navigateTo(AppRoute.UserProfile(userId))
+                            navigateToUserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
                             navigateTo(AppRoute.ClubProfile(clubId))
@@ -386,7 +466,9 @@ fun MainApp(
                     UserGroupProfileScreen(
                         userGroupId = currentRoute.userGroupId,
                         onBack = { popRoute() },
-                        onOpenUserProfile = { userId -> navigateTo(AppRoute.UserProfile(userId)) },
+                        onOpenUserProfile = { userId ->
+                            navigateToUserProfile(userId)
+                        },
                         onOpenEventProfile = { eventId, ownerUserId, groupId ->
                             navigateTo(AppRoute.EventProfile(eventId, ownerUserId, groupId))
                         },
@@ -400,7 +482,7 @@ fun MainApp(
                         groupId = currentRoute.groupId,
                         onBack = { popRoute() },
                         onOpenUserProfile = { userId ->
-                            navigateTo(AppRoute.UserProfile(userId))
+                            navigateToUserProfile(userId)
                         },
                         onOpenClubProfile = { clubId ->
                             navigateTo(AppRoute.ClubProfile(clubId))

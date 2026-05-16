@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
@@ -16,9 +15,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.eventSortMillis
+import com.example.rippleci.data.isOnDay
 import com.example.rippleci.data.isPastEvent
+import com.example.rippleci.data.models.SchoolEvent
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.schoolEventSortMillis
+import com.example.rippleci.data.stableSchoolEventId
+import com.example.rippleci.data.toEventInvite
+import com.example.rippleci.data.toFirestoreMap
 import com.example.rippleci.data.toPersonalEvent
+import com.example.rippleci.data.toSchoolEvent
 import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.events.EventsUiState
@@ -32,21 +38,33 @@ import java.util.*
 @Composable
 fun HomeScreen(
     eventsViewModel: EventsViewModel = viewModel(),
-    onOpenEventProfile: (String, String) -> Unit = { _, _ -> },
+    onOpenEventProfile: (String, String, String) -> Unit = { _, _, _ -> },
     onAddEvent: () -> Unit = {},
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
     val userId = auth.currentUser?.uid
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var markedSchoolEvents by remember { mutableStateOf<Map<String, SchoolEvent>>(emptyMap()) }
     val uiState by eventsViewModel.uiState.collectAsState()
     val nowMillis = System.currentTimeMillis()
+    val todayWeekdayLabel =
+        remember(nowMillis) {
+            SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(nowMillis))
+        }
+    val todayDateLabel =
+        remember(nowMillis) {
+            SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(nowMillis))
+        }
 
     var schoolEventsExpanded by remember { mutableStateOf(true) }
+    var myEventsExpanded by remember { mutableStateOf(true) }
 
-    val upcomingPersonalEvents =
-        personalEvents
-            .filterNot { it.isPastEvent(nowMillis) }
+    val todaysPersonalEvents =
+        (personalEvents + attendingEvents)
+            .distinctBy { event -> "${event.groupId}|${event.ownerUserId}|${event.id}" }
+            .filter { it.isOnDay(nowMillis) }
             .sortedBy { it.eventSortMillis() }
 
     // 1. Fetch Personal Events (Custom Events)
@@ -78,11 +96,84 @@ fun HomeScreen(
         }
     }
 
-    // 2. Helper to filter "Today's" School Events
-    val todayDateString =
-        remember {
-            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    LaunchedEffect(userId) {
+        val uid = userId ?: return@LaunchedEffect
+
+        db
+            .collection("eventInvites")
+            .whereEqualTo("toUserId", uid)
+            .whereEqualTo("status", "accepted")
+            .addSnapshotListener { snapshot, _ ->
+                attendingEvents = emptyList()
+
+                val invites = snapshot?.documents?.map { it.toEventInvite() } ?: emptyList()
+
+                invites.forEach { invite ->
+                    val eventRef =
+                        if (invite.groupId.isNotBlank()) {
+                            db
+                                .collection("userGroups")
+                                .document(invite.groupId)
+                                .collection("events")
+                                .document(invite.eventId)
+                        } else {
+                            db
+                                .collection("users")
+                                .document(invite.ownerUserId)
+                                .collection("personalEvents")
+                                .document(invite.eventId)
+                        }
+
+                    eventRef.get().addOnSuccessListener { eventDoc ->
+                        if (!eventDoc.exists()) return@addOnSuccessListener
+
+                        val event =
+                            eventDoc.toPersonalEvent().copy(
+                                id = eventDoc.id,
+                                ownerUserId =
+                                    eventDoc
+                                        .getString("ownerUserId")
+                                        .orEmpty()
+                                        .ifBlank { invite.ownerUserId },
+                                groupId = invite.groupId.ifBlank { eventDoc.getString("groupId").orEmpty() },
+                            )
+
+                        attendingEvents =
+                            attendingEvents
+                                .filterNot { it.id == event.id && it.ownerUserId == event.ownerUserId && it.groupId == event.groupId } + event
+                    }
+                }
+            }
+
+        db
+            .collection("users")
+            .document(uid)
+            .collection("schoolEventMarks")
+            .addSnapshotListener { snapshot, _ ->
+                markedSchoolEvents =
+                    snapshot
+                        ?.documents
+                        ?.associate { doc -> doc.id to doc.toSchoolEvent() }
+                        ?: emptyMap()
+            }
+    }
+
+    fun toggleSchoolEventAttendance(event: SchoolEvent) {
+        val uid = userId ?: return
+        val eventKey = event.stableSchoolEventId()
+        val markRef =
+            db
+                .collection("users")
+                .document(uid)
+                .collection("schoolEventMarks")
+                .document(eventKey)
+
+        if (markedSchoolEvents.containsKey(eventKey)) {
+            markRef.delete()
+        } else {
+            markRef.set(event.toFirestoreMap())
         }
+    }
 
     Column(
         modifier =
@@ -96,31 +187,54 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(
-                text = "My Custom Events",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            IconButton(onClick = onAddEvent) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Event",
-                    tint = MaterialTheme.colorScheme.primary,
+            FlowRow(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clickable { myEventsExpanded = !myEventsExpanded }
+                        .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    text = "Today's Events - $todayWeekdayLabel, ",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
                 )
+                Text(
+                    text = todayDateLabel,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            OutlinedButton(onClick = onAddEvent) {
+                Text("My Events")
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (upcomingPersonalEvents.isEmpty()) {
-            Text("No upcoming custom events.", style = MaterialTheme.typography.bodyMedium)
-        } else {
-            upcomingPersonalEvents.forEach { event ->
-                PersonalEventCard(
-                    event = event,
-                    onClick = { onOpenEventProfile(event.ownerUserId.ifBlank { userId.orEmpty() }, event.id) },
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+        if (myEventsExpanded) {
+            if (todaysPersonalEvents.isEmpty()) {
+                Text("No personal events today.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                todaysPersonalEvents.forEach { event ->
+                    PersonalEventCard(
+                        event = event,
+                        onClick = {
+                            onOpenEventProfile(
+                                event.ownerUserId.ifBlank { userId.orEmpty() },
+                                event.id,
+                                event.groupId,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
         }
 
@@ -161,15 +275,25 @@ fun HomeScreen(
 
                 is EventsUiState.Success -> {
                     val todaysEvents =
-                        state.events.filter { event ->
-                            event.startDateTime.contains(todayDateString)
-                        }
+                        state.events
+                            .filter { event -> event.isOnDay(nowMillis) }
+                            .sortedWith(
+                                compareByDescending<SchoolEvent> {
+                                    markedSchoolEvents.containsKey(it.stableSchoolEventId())
+                                }.thenBy { it.schoolEventSortMillis() },
+                            )
 
                     if (todaysEvents.isEmpty()) {
                         Text("No school events scheduled for today.", style = MaterialTheme.typography.bodyMedium)
                     } else {
                         todaysEvents.forEach { event ->
-                            EventCard(event = event)
+                            val eventKey = event.stableSchoolEventId()
+
+                            EventCard(
+                                event = event,
+                                isMarkedAttending = markedSchoolEvents.containsKey(eventKey),
+                                onToggleAttendance = { toggleSchoolEventAttendance(event) },
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
