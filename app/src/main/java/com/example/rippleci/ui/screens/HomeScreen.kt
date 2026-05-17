@@ -47,6 +47,7 @@ fun HomeScreen(
     val userId = auth.currentUser?.uid
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var pendingInvitesCount by remember { mutableStateOf(0) }
     var markedSchoolEvents by remember { mutableStateOf<Map<String, SchoolEvent>>(emptyMap()) }
     val uiState by eventsViewModel.uiState.collectAsState()
     val nowMillis = System.currentTimeMillis()
@@ -99,6 +100,14 @@ fun HomeScreen(
 
     LaunchedEffect(userId) {
         val uid = userId ?: return@LaunchedEffect
+
+        db
+            .collection("eventInvites")
+            .whereEqualTo("toUserId", uid)
+            .whereEqualTo("status", "pending")
+            .addSnapshotListener { snapshot, _ ->
+                pendingInvitesCount = snapshot?.documents?.size ?: 0
+            }
 
         db
             .collection("eventInvites")
@@ -223,9 +232,18 @@ fun HomeScreen(
             Spacer(modifier = Modifier.width(8.dp))
 
             RippleOutlinedButton(
-                text = "My Events",
-                onClick = onAddEvent
-            )
+                onClick = onAddEvent,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("My Events")
+                    if (pendingInvitesCount > 0) {
+                        Text(
+                            "Invites (${pendingInvitesCount})",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

@@ -417,6 +417,9 @@ fun MainApp(
                                 onOpenClubProfile = { clubId ->
                                     navigateTo(AppRoute.ClubProfile(clubId))
                                 },
+                                onOpenUserGroupProfile = { groupId ->
+                                    navigateTo(AppRoute.UserGroupProfile(groupId))
+                                },
                                 onOpenEventProfile = { eventId, eventOwnerUserId, eventGroupId ->
                                     navigateTo(
                                         AppRoute.EventProfile(

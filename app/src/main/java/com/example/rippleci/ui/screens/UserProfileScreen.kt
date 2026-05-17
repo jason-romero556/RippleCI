@@ -31,8 +31,10 @@ import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
+import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.FriendListCard
@@ -56,6 +58,7 @@ fun UserProfileScreen(
     onOpenConversation: (String, String) -> Unit,
     onOpenUserProfile: (String, String) -> Unit,
     onOpenClubProfile: (String) -> Unit,
+    onOpenUserGroupProfile: (String) -> Unit,
     onOpenEventProfile: (String, String, String) -> Unit,
     messagesViewModel: MessagesViewModel,
 ) {
@@ -65,6 +68,7 @@ fun UserProfileScreen(
 
     var userProfile by remember { mutableStateOf(UserProfile()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var userGroups by remember { mutableStateOf<List<UserGroupProfile>>(emptyList()) }
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isFriend by remember { mutableStateOf(false) }
@@ -75,6 +79,7 @@ fun UserProfileScreen(
     var currentUserName by remember { mutableStateOf("") }
     var isFriendListExpanded by remember { mutableStateOf(true) }
     var isClubListExpanded by remember { mutableStateOf(true) }
+    var isGroupListExpanded by remember { mutableStateOf(true) }
     var isEventListExpanded by remember { mutableStateOf(true) }
     var showPastEvents by remember { mutableStateOf(false) }
     var hasBlockedUser by remember { mutableStateOf(false) }
@@ -129,6 +134,14 @@ fun UserProfileScreen(
                     .addOnSuccessListener { result ->
                         personalEvents =
                             result.documents.map { it.toPersonalEvent().copy(ownerUserId = userId) }
+                    }
+
+                db
+                    .collection("userGroups")
+                    .whereArrayContains("memberIds", userId)
+                    .get()
+                    .addOnSuccessListener { result ->
+                        userGroups = result.documents.map { it.toUserGroupProfile() }
                     }
 
                 db
@@ -633,16 +646,39 @@ fun UserProfileScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (userProfile.clubIds.isEmpty()) {
-            Text("No clubs listed.")
-        } else {
-            CollapsibleSection(
-                title = "Clubs",
-                expanded = isClubListExpanded,
-                onToggle = { isClubListExpanded = !isClubListExpanded },
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
+        CollapsibleSection(
+            title = "Groups",
+            expanded = isGroupListExpanded,
+            onToggle = { isGroupListExpanded = !isGroupListExpanded },
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
+            if (userGroups.isEmpty()) {
+                Text("No groups yet.")
+            } else {
+                userGroups.forEach { group ->
+                    RippleButton(
+                        text = "${group.name.ifBlank { "Unnamed Group" }} (${group.memberIds.size} members)",
+                        onClick = { onOpenUserGroupProfile(group.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CollapsibleSection(
+            title = "Clubs",
+            expanded = isClubListExpanded,
+            onToggle = { isClubListExpanded = !isClubListExpanded },
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (userProfile.clubIds.isEmpty()) {
+                Text("No clubs listed.")
+            } else {
                 userProfile.clubIds.forEach { clubId ->
                     ClubLinkRow(
                         label = clubId,

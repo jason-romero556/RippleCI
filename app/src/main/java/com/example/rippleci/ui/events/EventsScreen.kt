@@ -389,6 +389,19 @@ fun EventsScreen(
                                     Text(invite.eventTitle.ifBlank { "Untitled Event" })
 
                                     Row {
+                                        RippleOutlinedButton(
+                                            text = "View Event",
+                                            onClick = {
+                                                onOpenEventProfile(
+                                                    invite.ownerUserId,
+                                                    invite.eventId,
+                                                    invite.groupId,
+                                                )
+                                            },
+                                        )
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
                                         RippleButton(
                                             text = "Accept",
                                             onClick = { acceptInvite(invite) },
