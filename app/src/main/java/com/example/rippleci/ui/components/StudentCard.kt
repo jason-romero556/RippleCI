@@ -13,6 +13,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.rippleci.data.models.UserProfile
+import com.example.rippleci.ui.components.RippleOutlinedButton
 
 @Composable
 fun StudentCard(
@@ -96,22 +97,20 @@ fun StudentCard(
 
             if (onViewProfile != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "View Profile",
                     onClick = onViewProfile,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("View Profile")
-                }
+                )
             }
 
             if (onMessage != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "Message",
                     onClick = onMessage,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Message")
-                }
+                )
             }
         }
     }

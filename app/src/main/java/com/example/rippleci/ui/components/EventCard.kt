@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.text.HtmlCompat
 import com.example.rippleci.data.models.SchoolEvent
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 
 @Composable
 fun EventCard(
@@ -136,19 +138,17 @@ fun EventCard(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         if (isMarkedAttending) {
-                            OutlinedButton(
+                            RippleOutlinedButton(
+                                text = "Remove from My Events",
                                 onClick = onToggleAttendance,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Remove from My Events")
-                            }
+                            )
                         } else {
-                            Button(
+                            RippleButton(
+                                text = "I'm Attending",
                                 onClick = onToggleAttendance,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("I'm Attending")
-                            }
+                            )
                         }
                     }
                 }

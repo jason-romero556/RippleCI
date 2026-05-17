@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.rippleci.ui.components.RippleButton
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
@@ -68,11 +69,12 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Button(
+        RippleButton(
+            text = if (isSignUp) "Sign Up" else "Login",
             onClick = {
                 if (email.isBlank() || password.isBlank()) {
                     errorMessage = "Please fill in all fields"
-                    return@Button
+                    return@RippleButton
                 }
                 if (isSignUp) {
                     auth.createUserWithEmailAndPassword(email, password)
@@ -91,9 +93,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                 }
             },
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (isSignUp) "Sign Up" else "Login")
-        }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 

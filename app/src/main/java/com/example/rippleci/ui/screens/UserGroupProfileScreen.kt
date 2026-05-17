@@ -38,6 +38,8 @@ import com.example.rippleci.ui.components.GroupVisibilityOptions
 import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.ProfileHeader
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.UserActionMenuButton
 import com.example.rippleci.ui.components.UserActionMenuItem
 import com.example.rippleci.ui.components.VisibilitySelector
@@ -509,19 +511,16 @@ fun UserGroupProfileScreen(
                             val isPendingInvite = invitedUserIds.contains(friend.id)
                             val displayName = friend.name.ifBlank { friend.email.ifBlank { friend.id } }
 
-                            OutlinedButton(
+                            RippleOutlinedButton(
+                                text = if (isPendingInvite) {
+                                    "$displayName - pending invite"
+                                } else {
+                                    "Invite $displayName"
+                                },
                                 onClick = { inviteUser(friend) },
                                 enabled = !isPendingInvite,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    if (isPendingInvite) {
-                                        "$displayName - pending invite"
-                                    } else {
-                                        "Invite $displayName"
-                                    },
-                                )
-                            }
+                            )
                         }
                     }
                 }
@@ -620,7 +619,8 @@ fun UserGroupProfileScreen(
                 }
             },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Save",
                     onClick = {
                         if (isOwner && membersCanInvite && !editedMembersCanInvite) {
                             showDisableGroupInvitesDialog = true
@@ -629,14 +629,10 @@ fun UserGroupProfileScreen(
                         }
                     },
                     enabled = editedGroupName.isNotBlank() && !isUploadingGroupImage,
-                ) {
-                    Text("Save")
-                }
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showEditGroupDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showEditGroupDialog = false })
             },
         )
     }
@@ -647,24 +643,22 @@ fun UserGroupProfileScreen(
             title = { Text("Disable Open Invites") },
             text = { Text("Remove members and pending invitees who are not in your friends list?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Remove Non-Friends",
                     onClick = {
                         showDisableGroupInvitesDialog = false
                         updateGroupProfile(removePeopleOutsideFriends = true)
                     },
-                ) {
-                    Text("Remove Non-Friends")
-                }
+                )
             },
             dismissButton = {
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "Keep Everyone",
                     onClick = {
                         showDisableGroupInvitesDialog = false
                         updateGroupProfile(removePeopleOutsideFriends = false)
                     },
-                ) {
-                    Text("Keep Everyone")
-                }
+                )
             },
         )
     }
@@ -683,24 +677,20 @@ fun UserGroupProfileScreen(
                         Text("Choose a new leader before leaving.")
 
                         possibleNewLeaders.forEach { member ->
-                            OutlinedButton(
+                            RippleOutlinedButton(
+                                text = member.name.ifBlank { member.email.ifBlank { member.id } },
                                 onClick = { transferLeadershipAndLeave(member.id) },
-                            ) {
-                                Text(member.name.ifBlank { member.email.ifBlank { member.id } })
-                            }
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
             },
             confirmButton = {
-                Button(onClick = { disbandGroup() }) {
-                    Text("Disband Group")
-                }
+                RippleButton(text = "Disband Group", onClick = { disbandGroup() })
             },
             dismissButton = {
-                OutlinedButton(onClick = { showOwnerLeaveDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showOwnerLeaveDialog = false })
             },
         )
     }
@@ -711,14 +701,10 @@ fun UserGroupProfileScreen(
             title = { Text("Leave Group") },
             text = { Text("Are you sure you want to leave $userGroupName?") },
             confirmButton = {
-                Button(onClick = { leaveGroup() }) {
-                    Text("Leave")
-                }
+                RippleButton(text = "Leave", onClick = { leaveGroup() })
             },
             dismissButton = {
-                OutlinedButton(onClick = { showLeaveDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showLeaveDialog = false })
             },
         )
     }
@@ -757,13 +743,12 @@ fun UserGroupProfileScreen(
             },
             actions = {
                 if (isMember) {
-                    OutlinedButton(
+                    RippleOutlinedButton(
+                        text = "Leave",
                         onClick = {
                             if (isOwner) showOwnerLeaveDialog = true else showLeaveDialog = true
                         },
-                    ) {
-                        Text("Leave")
-                    }
+                    )
                 }
             },
         )
@@ -779,7 +764,8 @@ fun UserGroupProfileScreen(
         }
 
         if (canManageMembers) {
-            OutlinedButton(
+            RippleOutlinedButton(
+                text = "Edit Group",
                 onClick = {
                     editedGroupName = userGroupName
                     editedGroupDescription = description
@@ -790,31 +776,27 @@ fun UserGroupProfileScreen(
                     showEditGroupDialog = true
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Edit Group")
-            }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }
 
         if (canInviteToGroup) {
-            Button(
+            RippleButton(
+                text = "Invite Friends",
                 onClick = { showInviteDialog = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Invite Friends")
-            }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }
 
         if (isMember) {
-            Button(
+            RippleButton(
+                text = "Create Group Event",
                 onClick = { showCreateEventScreen = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Create Group Event")
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -874,12 +856,11 @@ fun UserGroupProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "${member.name.ifBlank { member.email.ifBlank { member.id } }} - $role",
                     onClick = { onOpenUserProfile(member.id) },
                     modifier = Modifier.weight(1f),
-                ) {
-                    Text("${member.name.ifBlank { member.email.ifBlank { member.id } }} - $role")
-                }
+                )
 
                 if (canManageMembers && member.id != currentUserId && member.id != ownerUserId) {
                     Spacer(modifier = Modifier.width(8.dp))

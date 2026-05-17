@@ -1,7 +1,7 @@
 package com.example.rippleci.ui.screens
 
-import android.os.Build
 import android.net.Uri
+import android.os.Build
 import android.widget.NumberPicker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +46,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.ui.components.EventVisibilityOptions
 import com.example.rippleci.ui.components.ImageUploadControls
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.components.createImageCaptureUri
 import com.google.firebase.Firebase
@@ -296,30 +298,27 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = dateLabel,
             onClick = { showDateDialog = true },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(dateLabel)
-        }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = startTimeLabel,
             onClick = { showStartTimeDialog = true },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(startTimeLabel)
-        }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = endTimeLabel,
             onClick = { showEndTimeDialog = true },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(endTimeLabel)
-        }
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -355,11 +354,12 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        RippleButton(
+            text = saveButtonText,
             onClick = {
                 if (isUploadingImage) {
                     statusMessage = "Wait for the image upload to finish."
-                    return@Button
+                    return@RippleButton
                 }
 
                 val startMillis = startAtMillis
@@ -407,16 +407,15 @@ fun CreatePersonalEventScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = canAttemptSave && !isUploadingImage,
-        ) {
-            Text(saveButtonText)
-        }
+        )
 
-        OutlinedButton(
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RippleOutlinedButton(
+            text = "Cancel",
             onClick = onCancel,
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Cancel")
-        }
+        )
     }
 }
 

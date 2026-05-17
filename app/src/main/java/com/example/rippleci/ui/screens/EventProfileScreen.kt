@@ -38,6 +38,8 @@ import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.EventVisibilityOptions
 import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.ProfileInfoRow
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.UserActionMenuButton
 import com.example.rippleci.ui.components.UserActionMenuItem
 import com.example.rippleci.ui.components.UserLinkRow
@@ -584,20 +586,17 @@ fun EventProfileScreen(
                         val isAttending = attendeeIds.contains(friend.id)
                         val isBlockedFromEvent = blockedUserIds.contains(friend.id)
 
-                        OutlinedButton(
+                        RippleOutlinedButton(
+                            text = when {
+                                isBlockedFromEvent -> "${friend.name} blocked"
+                                isAttending -> "${friend.name} attending"
+                                alreadyInvited -> "${friend.name} invited"
+                                else -> friend.name
+                            },
                             onClick = { inviteUser(friend) },
                             enabled = !alreadyInvited && !isAttending && !isBlockedFromEvent,
                             modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                when {
-                                    isBlockedFromEvent -> "${friend.name} blocked"
-                                    isAttending -> "${friend.name} attending"
-                                    alreadyInvited -> "${friend.name} invited"
-                                    else -> friend.name
-                                },
-                            )
-                        }
+                        )
                     }
                 }
             },
@@ -615,23 +614,18 @@ fun EventProfileScreen(
             title = { Text("Delete Event") },
             text = { Text("Are you sure you want to delete ${title.ifBlank { "this event" }}?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Delete",
                     onClick = {
                         showDeleteDialog = false
                         deleteEvent()
                     },
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Text("Delete")
-                }
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showDeleteDialog = false })
             },
         )
     }
@@ -642,19 +636,16 @@ fun EventProfileScreen(
             title = { Text("Leave Event") },
             text = { Text("Are you sure you want to leave ${title.ifBlank { "this event" }}?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Leave",
                     onClick = {
                         showLeaveDialog = false
                         leaveEvent()
                     },
-                ) {
-                    Text("Leave")
-                }
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showLeaveDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showLeaveDialog = false })
             },
         )
     }
@@ -670,7 +661,8 @@ fun EventProfileScreen(
             title = { Text("Disable Open Invites") },
             text = { Text("Remove attendees and pending invitees who are not in your friends list?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Remove Non-Friends",
                     onClick = {
                         if (pendingUpdate != null) {
                             updateEvent(pendingUpdate, removePeopleOutsideFriends = true)
@@ -678,12 +670,11 @@ fun EventProfileScreen(
                         showDisableOpenInvitesDialog = false
                         pendingInviteSettingUpdate = null
                     },
-                ) {
-                    Text("Remove Non-Friends")
-                }
+                )
             },
             dismissButton = {
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "Keep Everyone",
                     onClick = {
                         if (pendingUpdate != null) {
                             updateEvent(pendingUpdate, removePeopleOutsideFriends = false)
@@ -691,9 +682,7 @@ fun EventProfileScreen(
                         showDisableOpenInvitesDialog = false
                         pendingInviteSettingUpdate = null
                     },
-                ) {
-                    Text("Keep Everyone")
-                }
+                )
             },
         )
     }
@@ -819,12 +808,11 @@ fun EventProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedButton(
+                    RippleOutlinedButton(
+                        text = attendeeName,
                         onClick = { onOpenUserProfile(attendeeId) },
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Text(attendeeName)
-                    }
+                    )
 
                     if (canManageAttendee) {
                         Spacer(modifier = Modifier.width(8.dp))
@@ -859,9 +847,11 @@ fun EventProfileScreen(
                 !currentEvent.isPastEvent()
 
         if (canLeaveEvent) {
-            OutlinedButton(onClick = { showLeaveDialog = true }) {
-                Text("Leave Event")
-            }
+            RippleOutlinedButton(
+                text = "Leave Event",
+                onClick = { showLeaveDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -874,9 +864,11 @@ fun EventProfileScreen(
         if (canInviteToEvent && !currentEvent.isPastEvent()) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(onClick = { showInviteDialog = true }) {
-                Text("Invite Friends")
-            }
+            RippleButton(
+                text = "Invite Friends",
+                onClick = { showInviteDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         if (canManageEvent) {
@@ -884,9 +876,11 @@ fun EventProfileScreen(
 
             Text("Manage Event", style = MaterialTheme.typography.titleMedium)
 
-            Button(onClick = { showEditEventScreen = true }) {
-                Text("Edit Event")
-            }
+            RippleButton(
+                text = "Edit Event",
+                onClick = { showEditEventScreen = true },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -920,12 +914,11 @@ fun EventProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedButton(
+                        RippleOutlinedButton(
+                            text = blockedName,
                             onClick = { onOpenUserProfile(blockedUserId) },
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Text(blockedName)
-                        }
+                        )
 
                         Spacer(modifier = Modifier.width(8.dp))
 
@@ -944,15 +937,15 @@ fun EventProfileScreen(
                 }
             }
 
-            Button(
+            Spacer(modifier = Modifier.height(12.dp))
+
+            RippleButton(
+                text = "Delete Event",
                 onClick = { showDeleteDialog = true },
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-            ) {
-                Text("Delete Event")
-            }
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

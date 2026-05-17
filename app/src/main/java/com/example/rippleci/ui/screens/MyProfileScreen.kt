@@ -64,6 +64,8 @@ import com.example.rippleci.data.UserPresence
 import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.MESSAGE_PRIVACY_FRIENDS
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.theme.AppTheme
 import com.example.rippleci.ui.theme.ThemeViewModel
@@ -116,21 +118,23 @@ fun ProfileScreen(
             UserPresence.OFFLINE to "Offline",
         )
 
-    val filteredMajors = remember(majorQuery) {
-        if (majorQuery.isBlank()) {
-            emptyList()
-        } else {
-            CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+    val filteredMajors =
+        remember(majorQuery) {
+            if (majorQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciMajors.filter { it.contains(majorQuery, ignoreCase = true) }
+            }
         }
-    }
 
-    val filteredClubs = remember(clubQuery, selectedClubs) {
-        if (clubQuery.isBlank()) {
-            emptyList()
-        } else {
-            CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+    val filteredClubs =
+        remember(clubQuery, selectedClubs) {
+            if (clubQuery.isBlank()) {
+                emptyList()
+            } else {
+                CsuciClubs.filter { it.contains(clubQuery, ignoreCase = true) }
+            }
         }
-    }
 
     val imagePickerLauncher =
         rememberLauncherForActivityResult(
@@ -160,7 +164,10 @@ fun ProfileScreen(
 
     LaunchedEffect(userId) {
         userId?.let { uid ->
-            db.collection("users").document(uid).get()
+            db
+                .collection("users")
+                .document(uid)
+                .get()
                 .addOnSuccessListener { doc ->
                     name = doc.getString("name") ?: ""
                     bio = doc.getString("bio") ?: ""
@@ -189,13 +196,20 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.Start,
     ) {
-        Text("My Profile", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            text = "My Profile",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Box(contentAlignment = Alignment.BottomEnd) {
+        Box(
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            contentAlignment = Alignment.BottomEnd
+        ) {
             if (profilePictureUrl.isNotEmpty()) {
                 AsyncImage(
                     model = profilePictureUrl,
@@ -238,7 +252,11 @@ fun ProfileScreen(
 
         if (isUploading) {
             Spacer(modifier = Modifier.height(8.dp))
-            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(24.dp)
+                    .align(Alignment.CenterHorizontally)
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -247,6 +265,7 @@ fun ProfileScreen(
             text = auth.currentUser?.email ?: "",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -493,11 +512,12 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
+            RippleButton(
+                text = "Save Profile",
                 onClick = {
                     if (majorQuery.isNotBlank() && major.isEmpty()) {
                         statusMessage = "Please select a valid major from the list."
-                        return@Button
+                        return@RippleButton
                     }
 
                     userId?.let { uid ->
@@ -519,7 +539,9 @@ fun ProfileScreen(
                                 "presenceUpdatedAt" to System.currentTimeMillis(),
                             )
 
-                        db.collection("users").document(uid)
+                        db
+                            .collection("users")
+                            .document(uid)
                             .set(profile, SetOptions.merge())
                             .addOnSuccessListener {
                                 statusMessage = "Profile saved!"
@@ -530,19 +552,19 @@ fun ProfileScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Save Profile")
-            }
+            )
         } else {
             Text(
                 text = name.ifEmpty { "No name set" },
                 style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
             )
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = bio.ifEmpty { "No bio yet" },
                 style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -566,12 +588,11 @@ fun ProfileScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
+            RippleButton(
+                text = "Edit Profile",
                 onClick = { isEditing = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Edit Profile")
-            }
+            )
         }
 
         if (statusMessage.isNotEmpty()) {
@@ -588,12 +609,11 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = "Sign Out",
             onClick = onSignOut,
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Sign Out")
-        }
+        )
     }
 }
 
@@ -611,12 +631,11 @@ fun ThemeSelector(viewModel: ThemeViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Box {
-            OutlinedButton(
+            RippleOutlinedButton(
+                text = "Current Theme: ${viewModel.appTheme.label}",
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Current Theme: ${viewModel.appTheme.label}")
-            }
+            )
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },

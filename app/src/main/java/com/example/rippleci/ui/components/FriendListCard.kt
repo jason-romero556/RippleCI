@@ -13,6 +13,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.rippleci.data.models.UserProfile
+import com.example.rippleci.ui.components.RippleOutlinedButton
 
 @Composable
 fun FriendListCard(
@@ -114,12 +115,11 @@ fun FriendListCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             if (onViewProfile != null) {
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "View Profile",
                     onClick = onViewProfile,
                     modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("View Profile")
-                }
+                )
             }
         }
     }

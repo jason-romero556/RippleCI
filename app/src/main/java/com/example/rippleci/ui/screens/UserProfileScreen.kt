@@ -39,6 +39,7 @@ import com.example.rippleci.ui.components.FriendListCard
 import com.example.rippleci.ui.components.FriendshipStatusMenuButton
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.ProfileHeader
+import com.example.rippleci.ui.components.RippleButton
 import com.example.rippleci.ui.components.UserPresenceIndicator
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
@@ -484,7 +485,8 @@ fun UserProfileScreen(
         if (canMessageUser) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
+            RippleButton(
+                text = "Send Message",
                 onClick = {
                     messagesViewModel.getOrCreateDMConversation(
                         otherUserId = userId,
@@ -494,9 +496,7 @@ fun UserProfileScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Send Message")
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
