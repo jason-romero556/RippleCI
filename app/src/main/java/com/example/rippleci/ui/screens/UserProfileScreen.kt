@@ -44,6 +44,7 @@ import com.example.rippleci.ui.components.UserPresenceIndicator
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 
@@ -105,13 +106,19 @@ fun UserProfileScreen(
                 )
 
                 if (userProfile.friendIds.isNotEmpty()) {
-                    db
-                        .collection("users")
-                        .whereIn("__name__", userProfile.friendIds)
-                        .get()
-                        .addOnSuccessListener { result ->
-                            friendProfiles = result.documents.map { it.toUserProfile() }
-                        }
+                    friendProfiles = emptyList()
+
+                    userProfile.friendIds.distinct().chunked(10).forEach { chunk ->
+                        db.collection("users")
+                            .whereIn(FieldPath.documentId(), chunk)
+                            .get()
+                            .addOnSuccessListener { result ->
+                                friendProfiles =
+                                    (friendProfiles + result.documents.map { it.toUserProfile() })
+                                        .distinctBy { it.id }
+                                        .sortedBy { userProfile.friendIds.indexOf(it.id) }
+                            }
+                    }
                 }
 
                 db
