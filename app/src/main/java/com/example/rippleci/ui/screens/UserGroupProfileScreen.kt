@@ -16,9 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -94,7 +92,6 @@ fun UserGroupProfileScreen(
     var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var editedGroupVisibility by remember { mutableStateOf("public") }
     var editedMembersCanInvite by remember { mutableStateOf(false) }
-    var editedAdminsCanManageInvites by remember { mutableStateOf(false) }
     var showDisableGroupInvitesDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
@@ -403,10 +400,6 @@ fun UserGroupProfileScreen(
             updates["membersCanInvite"] = editedMembersCanInvite
         }
 
-        if (isOwner) {
-            updates["adminsCanManageInvites"] = editedAdminsCanManageInvites
-        }
-
         if (removePeopleOutsideFriends) {
             updates["memberIds"] = updatedMemberIds
             updates["adminIds"] = updatedAdminIds
@@ -420,9 +413,6 @@ fun UserGroupProfileScreen(
             groupVisibility = editedGroupVisibility
             if (canManageInviteSettings) {
                 membersCanInvite = editedMembersCanInvite
-            }
-            if (isOwner) {
-                adminsCanManageInvites = editedAdminsCanManageInvites
             }
             if (removePeopleOutsideFriends) {
                 memberIds = updatedMemberIds
@@ -596,26 +586,6 @@ fun UserGroupProfileScreen(
                             enabled = canManageInviteSettings,
                         )
                     }
-
-                    if (isOwner) {
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Admins can manage invites",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Switch(
-                                checked = editedAdminsCanManageInvites,
-                                onCheckedChange = { editedAdminsCanManageInvites = it },
-                            )
-                        }
-                    }
                 }
             },
             confirmButton = {
@@ -772,7 +742,6 @@ fun UserGroupProfileScreen(
                     editedGroupProfilePictureUrl = groupProfilePictureUrl
                     editedGroupVisibility = groupVisibility
                     editedMembersCanInvite = membersCanInvite
-                    editedAdminsCanManageInvites = adminsCanManageInvites
                     showEditGroupDialog = true
                 },
                 modifier = Modifier.fillMaxWidth(),

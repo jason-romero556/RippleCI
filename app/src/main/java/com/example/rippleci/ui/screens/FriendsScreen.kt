@@ -93,7 +93,6 @@ fun FriendsScreen(
     var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var groupVisibility by remember { mutableStateOf("public") }
     var groupMembersCanInvite by remember { mutableStateOf(false) }
-    var groupAdminsCanManageInvites by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var blockedByUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val hiddenUserIds = blockedUserIds + blockedByUserIds
@@ -342,7 +341,7 @@ fun FriendsScreen(
                     "adminIds" to listOf(uid),
                     "visibility" to groupVisibility,
                     "membersCanInvite" to groupMembersCanInvite,
-                    "adminsCanManageInvites" to groupAdminsCanManageInvites,
+                    "adminsCanManageInvites" to false,
                     "createdAt" to System.currentTimeMillis(),
                 ),
             ).addOnSuccessListener {
@@ -351,7 +350,6 @@ fun FriendsScreen(
                 groupProfilePictureUrl = ""
                 groupVisibility = "public"
                 groupMembersCanInvite = false
-                groupAdminsCanManageInvites = false
                 showCreateGroupDialog = false
             }
     }
@@ -578,22 +576,6 @@ fun FriendsScreen(
                             onCheckedChange = { groupMembersCanInvite = it },
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Admins can manage invites",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = groupAdminsCanManageInvites,
-                            onCheckedChange = { groupAdminsCanManageInvites = it },
-                        )
-                    }
                 }
             },
             confirmButton = {
@@ -705,12 +687,19 @@ fun FriendsScreen(
                     } else {
                         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                             incomingRequests.forEach { request ->
-                                val senderFirstName =
+                                val senderDisplayName =
                                     incomingRequestSenderNames[request.fromUserId]
-                                        ?: firstNameFromCandidates(request.fromUserName)
+                                        ?: request.fromUserName.ifBlank { request.fromUserId }
+                                val senderFirstName =
+                                    firstNameFromCandidates(senderDisplayName)
+                                        .ifBlank { senderDisplayName.ifBlank { "Unknown user" } }
 
                                 Card(
+                                    onClick = {
+                                        onOpenUserProfile(request.fromUserId, senderDisplayName)
+                                    },
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    enabled = request.fromUserId.isNotBlank(),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                                 ) {
                                     Row(
@@ -786,11 +775,29 @@ fun FriendsScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary,
                                     )
-                                    Row {
-                                        RippleButton(text = "Accept", onClick = { acceptGroupInvite(invite) })
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        RippleOutlinedButton(text = "Decline", onClick = { declineGroupInvite(invite) })
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        RippleButton(
+                                            text = "Accept",
+                                            onClick = { acceptGroupInvite(invite) },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        RippleOutlinedButton(
+                                            text = "Decline",
+                                            onClick = { declineGroupInvite(invite) },
+                                            modifier = Modifier.weight(1f),
+                                        )
                                     }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    RippleOutlinedButton(
+                                        text = "View Group",
+                                        onClick = { onOpenUserGroupProfile(invite.groupId) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = invite.groupId.isNotBlank(),
+                                    )
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))

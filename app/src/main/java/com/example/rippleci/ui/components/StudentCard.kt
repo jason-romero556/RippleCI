@@ -92,7 +92,7 @@ fun StudentCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             ProfileInfoRow("Major", user.major.ifBlank { "Not set" })
-            ProfileInfoRow("Clubs", clubsText)
+            ProfileInfoRow("Clubs", clubsText, maxValueLines = 1)
             ProfileInfoRow("Classes", classesText)
 
             if (onViewProfile != null) {

@@ -141,19 +141,17 @@ fun MainApp(
 
     Scaffold(
         bottomBar = {
-            if (routeStack.isEmpty()) {
-                RippleNavigationBar {
-                    AppDestinations.entries.forEach { destination ->
-                        RippleNavigationBarItem(
-                            selected = currentDestination == destination,
-                            onClick = {
-                                resetToTabs()
-                                currentDestination = destination
-                            },
-                            icon = destination.icon,
-                            label = destination.label
-                        )
-                    }
+            RippleNavigationBar {
+                AppDestinations.entries.forEach { destination ->
+                    RippleNavigationBarItem(
+                        selected = currentDestination == destination,
+                        onClick = {
+                            resetToTabs()
+                            currentDestination = destination
+                        },
+                        icon = destination.icon,
+                        label = destination.label
+                    )
                 }
             }
         }

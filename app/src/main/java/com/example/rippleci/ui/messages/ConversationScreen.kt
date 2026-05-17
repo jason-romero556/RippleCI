@@ -159,6 +159,7 @@ fun ConversationScreen(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(messages) { message ->

@@ -2,7 +2,6 @@ package com.example.rippleci.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -35,7 +34,7 @@ fun RippleButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.height(38.dp),
-        shape = RoundedCornerShape(9.dp),
+        shape = MaterialTheme.shapes.small,
         color = if (enabled) actualContainerColor else actualContainerColor.copy(alpha = 0.38f),
         contentColor = if (enabled) actualContentColor else actualContentColor.copy(alpha = 0.38f),
         border = BorderStroke(

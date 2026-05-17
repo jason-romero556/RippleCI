@@ -444,6 +444,15 @@ fun UserProfileScreen(
             !hasBlockedUser &&
             !isBlockedByUser &&
             (isFriend || userProfile.messagePrivacy == MESSAGE_PRIVACY_EVERYONE)
+    val nowMillis = System.currentTimeMillis()
+    val upcomingVisibleEvents =
+        visiblePersonalEvents
+            .filterNot { it.isPastEvent(nowMillis) }
+            .sortedBy { it.eventSortMillis() }
+    val pastVisibleEvents =
+        visiblePersonalEvents
+            .filter { it.isPastEvent(nowMillis) }
+            .sortedByDescending { it.eventSortMillis() }
 
     Column(
         modifier =
@@ -532,7 +541,36 @@ fun UserProfileScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (visiblePersonalEvents.isNotEmpty()) {
+        if (visiblePersonalEvents.isEmpty()) {
+            Text("No visible attending events.")
+        } else if (upcomingVisibleEvents.isEmpty()) {
+            Text("No upcoming visible events.")
+
+            if (pastVisibleEvents.isNotEmpty()) {
+                TextButton(onClick = { showPastEvents = !showPastEvents }) {
+                    Text(if (showPastEvents) "Hide past events" else "View past events")
+                }
+            }
+
+            if (showPastEvents && pastVisibleEvents.isNotEmpty()) {
+                Text("Past Events", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                pastVisibleEvents.forEach { event ->
+                    PersonalEventCard(
+                        event = event,
+                        onClick = {
+                            onOpenEventProfile(
+                                event.id,
+                                event.ownerUserId.ifBlank { userId },
+                                event.groupId,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        } else {
             Spacer(modifier = Modifier.height(16.dp))
 
             CollapsibleSection(
@@ -540,50 +578,36 @@ fun UserProfileScreen(
                 expanded = isEventListExpanded,
                 onToggle = { isEventListExpanded = !isEventListExpanded },
             ) {
-                val nowMillis = System.currentTimeMillis()
-                val upcomingEvents =
-                    visiblePersonalEvents
-                        .filterNot { it.isPastEvent(nowMillis) }
-                        .sortedBy { it.eventSortMillis() }
-                val pastEvents =
-                    visiblePersonalEvents
-                        .filter { it.isPastEvent(nowMillis) }
-                        .sortedByDescending { it.eventSortMillis() }
-
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (upcomingEvents.isEmpty()) {
-                    Text("No upcoming visible events.")
-                } else {
-                    Text("Upcoming Events", style = MaterialTheme.typography.titleSmall)
-                    Spacer(modifier = Modifier.height(8.dp))
+                Text("Upcoming Events", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(8.dp))
 
-                    upcomingEvents.forEach { event ->
-                        PersonalEventCard(
-                            event = event,
-                            onClick = {
-                                onOpenEventProfile(
-                                    event.id,
-                                    event.ownerUserId.ifBlank { userId },
-                                    event.groupId,
-                                )
-                            },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                upcomingVisibleEvents.forEach { event ->
+                    PersonalEventCard(
+                        event = event,
+                        onClick = {
+                            onOpenEventProfile(
+                                event.id,
+                                event.ownerUserId.ifBlank { userId },
+                                event.groupId,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                if (pastEvents.isNotEmpty()) {
+                if (pastVisibleEvents.isNotEmpty()) {
                     TextButton(onClick = { showPastEvents = !showPastEvents }) {
                         Text(if (showPastEvents) "Hide past events" else "View past events")
                     }
                 }
 
-                if (showPastEvents && pastEvents.isNotEmpty()) {
+                if (showPastEvents && pastVisibleEvents.isNotEmpty()) {
                     Text("Past Events", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    pastEvents.forEach { event ->
+                    pastVisibleEvents.forEach { event ->
                         PersonalEventCard(
                             event = event,
                             onClick = {
@@ -598,8 +622,6 @@ fun UserProfileScreen(
                     }
                 }
             }
-        } else {
-            Text("No visible attending events.")
         }
 
         Spacer(modifier = Modifier.height(16.dp))

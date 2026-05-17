@@ -3,7 +3,6 @@ package com.example.rippleci.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -65,7 +64,7 @@ fun RowScope.RippleNavigationBarItem(
         ) {
             Surface(
                 color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                shape = RoundedCornerShape(9.dp), // Consistent 9.dp Ripple corners
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.size(width = 64.dp, height = 32.dp),
                 border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)) else null
             ) {
