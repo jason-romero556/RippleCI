@@ -10,6 +10,7 @@ data class UserGroupProfile(
     val visibility: String = "public",
     val bulletinVisibility: String = "public",
     val membersCanInvite: Boolean = false,
+    val membersCanCreateEvents: Boolean = false,
     val membersCanPostBulletin: Boolean = false,
     val adminsCanManageInvites: Boolean = false,
     val eventDefaultVisibility: String = "members",

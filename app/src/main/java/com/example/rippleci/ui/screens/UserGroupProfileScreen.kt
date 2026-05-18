@@ -42,16 +42,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.rippleci.data.canViewEvent
 import com.example.rippleci.data.canViewGroupProfile
 import com.example.rippleci.data.canViewPastGroupEvents
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.isPastEvent
-import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_FULL
 import com.example.rippleci.data.models.GROUP_PAST_EVENTS_ADMINS
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserGroupAdminPermissions
@@ -64,6 +66,7 @@ import com.example.rippleci.data.toUserGroupBulletinComment
 import com.example.rippleci.data.toUserGroupBulletinPost
 import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
+import com.example.rippleci.ui.components.BulletinBoardVisibilityOptions
 import com.example.rippleci.ui.components.GroupEventVisibilityOptions
 import com.example.rippleci.ui.components.GroupVisibilityOptions
 import com.example.rippleci.ui.components.ImageUploadControls
@@ -74,7 +77,6 @@ import com.example.rippleci.ui.components.RippleButton
 import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.UserActionMenuButton
 import com.example.rippleci.ui.components.UserActionMenuItem
-import com.example.rippleci.ui.components.BulletinBoardVisibilityOptions
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.components.createImageCaptureUri
 import com.google.firebase.Firebase
@@ -96,7 +98,10 @@ fun UserGroupProfileScreen(
     val db = Firebase.firestore
     val storage = Firebase.storage
     val context = LocalContext.current
-    val currentUserId = Firebase.auth.currentUser?.uid.orEmpty()
+    val currentUserId =
+        Firebase.auth.currentUser
+            ?.uid
+            .orEmpty()
     val groupRef = remember(userGroupId) { db.collection("userGroups").document(userGroupId) }
 
     var groupProfile by remember { mutableStateOf<UserGroupProfile?>(null) }
@@ -117,6 +122,7 @@ fun UserGroupProfileScreen(
     var editedGroupProfilePictureUrl by remember { mutableStateOf("") }
     var editedGroupVisibility by remember { mutableStateOf("public") }
     var editedMembersCanInvite by remember { mutableStateOf(false) }
+    var editedMembersCanCreateEvents by remember { mutableStateOf(false) }
     var editedMembersCanPostBulletin by remember { mutableStateOf(false) }
     var editedBulletinVisibility by remember { mutableStateOf("public") }
     var editedEventDefaultVisibility by remember { mutableStateOf("members") }
@@ -179,14 +185,16 @@ fun UserGroupProfileScreen(
 
     DisposableEffect(userGroupId) {
         val registration =
-            groupRef.collection("events")
+            groupRef
+                .collection("events")
                 .addSnapshotListener { snapshot, _ ->
                     groupEvents =
                         snapshot?.documents?.map { doc ->
                             doc.toPersonalEvent().copy(
                                 id = doc.id,
                                 ownerUserId =
-                                    doc.getString("ownerUserId")
+                                    doc
+                                        .getString("ownerUserId")
                                         .orEmpty()
                                         .ifBlank { doc.getString("createdByUserId").orEmpty() },
                                 groupId = userGroupId,
@@ -203,7 +211,8 @@ fun UserGroupProfileScreen(
             onDispose { }
         } else {
             val registration =
-                db.collection("users")
+                db
+                    .collection("users")
                     .document(currentUserId)
                     .collection("personalEvents")
                     .addSnapshotListener { snapshot, _ ->
@@ -212,7 +221,8 @@ fun UserGroupProfileScreen(
                                 doc.toPersonalEvent().copy(
                                     id = doc.id,
                                     ownerUserId =
-                                        doc.getString("ownerUserId")
+                                        doc
+                                            .getString("ownerUserId")
                                             .orEmpty()
                                             .ifBlank { currentUserId },
                                 )
@@ -225,7 +235,8 @@ fun UserGroupProfileScreen(
 
     DisposableEffect(userGroupId) {
         val registration =
-            groupRef.collection("bulletinPosts")
+            groupRef
+                .collection("bulletinPosts")
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, _ ->
                     bulletinPosts = snapshot?.documents?.map { it.toUserGroupBulletinPost() } ?: emptyList()
@@ -241,7 +252,8 @@ fun UserGroupProfileScreen(
             onDispose { }
         } else {
             val registration =
-                groupRef.collection("bulletinPosts")
+                groupRef
+                    .collection("bulletinPosts")
                     .document(postId)
                     .collection("comments")
                     .orderBy("createdAt", Query.Direction.ASCENDING)
@@ -268,16 +280,21 @@ fun UserGroupProfileScreen(
             return@LaunchedEffect
         }
 
-        db.collection("users")
+        db
+            .collection("users")
             .document(currentUserId)
             .get()
             .addOnSuccessListener { userDoc ->
                 currentUserName =
-                    userDoc.getString("name")
+                    userDoc
+                        .getString("name")
                         .orEmpty()
                         .ifBlank { userDoc.getString("email").orEmpty() }
-                        .ifBlank { Firebase.auth.currentUser?.email.orEmpty() }
-                        .ifBlank { "Unknown user" }
+                        .ifBlank {
+                            Firebase.auth.currentUser
+                                ?.email
+                                .orEmpty()
+                        }.ifBlank { "Unknown user" }
                 currentUserProfilePictureUrl = userDoc.getString("profilePictureUrl").orEmpty()
 
                 val friendIds =
@@ -304,7 +321,8 @@ fun UserGroupProfileScreen(
         val storageRef =
             storage.reference.child("group_pictures/$userGroupId/${System.currentTimeMillis()}.jpg")
 
-        storageRef.putFile(uri)
+        storageRef
+            .putFile(uri)
             .addOnSuccessListener {
                 storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
                     editedGroupProfilePictureUrl = downloadUrl.toString()
@@ -322,7 +340,8 @@ fun UserGroupProfileScreen(
         val storageRef =
             storage.reference.child("group_bulletin_images/$userGroupId/${System.currentTimeMillis()}.jpg")
 
-        storageRef.putFile(uri)
+        storageRef
+            .putFile(uri)
             .addOnSuccessListener {
                 storageRef.downloadUrl.addOnSuccessListener { downloadUrl ->
                     bulletinImageUrl = downloadUrl.toString()
@@ -366,7 +385,7 @@ fun UserGroupProfileScreen(
     val adminPermissions = safeProfile.adminPermissions
     val canKickMembers = isOwner || (isAdmin && adminPermissions.canKickMembers)
     val canPromoteAdmins = isOwner || (isAdmin && adminPermissions.canPromoteAdmins)
-    val canCreateGroupEvents = isOwner || (isAdmin && adminPermissions.canCreateEvents)
+    val canCreateGroupEvents = isOwner || isAdmin || (isMember && safeProfile.membersCanCreateEvents)
     val canSetGroupEventVisibility = isOwner || (isAdmin && adminPermissions.canSetEventVisibility)
     val canEditGroupProfile = isOwner || (isAdmin && adminPermissions.canEditGroupProfile)
     val canManageInviteSettings = isOwner || (isAdmin && adminPermissions.canManageInviteSettings)
@@ -441,24 +460,26 @@ fun UserGroupProfileScreen(
                 .filterNot { it == currentUserId }
                 .distinct()
 
-        groupRef.update(
-            mapOf(
-                "ownerUserId" to newOwnerId,
-                "memberIds" to remainingMembers,
-                "adminIds" to updatedAdmins,
-            ),
-        ).addOnSuccessListener { onBack() }
+        groupRef
+            .update(
+                mapOf(
+                    "ownerUserId" to newOwnerId,
+                    "memberIds" to remainingMembers,
+                    "adminIds" to updatedAdmins,
+                ),
+            ).addOnSuccessListener { onBack() }
     }
 
     fun leaveGroup() {
         if (currentUserId.isBlank() || !isMember || isOwner) return
 
-        groupRef.update(
-            mapOf(
-                "memberIds" to FieldValue.arrayRemove(currentUserId),
-                "adminIds" to FieldValue.arrayRemove(currentUserId),
-            ),
-        ).addOnSuccessListener { onBack() }
+        groupRef
+            .update(
+                mapOf(
+                    "memberIds" to FieldValue.arrayRemove(currentUserId),
+                    "adminIds" to FieldValue.arrayRemove(currentUserId),
+                ),
+            ).addOnSuccessListener { onBack() }
     }
 
     fun kickMember(memberId: String) {
@@ -537,6 +558,7 @@ fun UserGroupProfileScreen(
             updates["bulletinVisibility"] = editedBulletinVisibility
             updates["eventDefaultVisibility"] = editedEventDefaultVisibility
             updates["pastEventsVisibility"] = editedPastEventsVisibility
+            updates["membersCanCreateEvents"] = editedMembersCanCreateEvents
             updates["membersCanPostBulletin"] = editedMembersCanPostBulletin
         }
 
@@ -577,6 +599,12 @@ fun UserGroupProfileScreen(
                         },
                     visibility = if (canEditGroupProfile) editedGroupVisibility else safeProfile.visibility,
                     membersCanInvite = if (canManageInviteSettings) editedMembersCanInvite else safeProfile.membersCanInvite,
+                    membersCanCreateEvents =
+                        if (canManagePermissionMenu) {
+                            editedMembersCanCreateEvents
+                        } else {
+                            safeProfile.membersCanCreateEvents
+                        },
                     membersCanPostBulletin =
                         if (canManagePermissionMenu) {
                             editedMembersCanPostBulletin
@@ -621,14 +649,17 @@ fun UserGroupProfileScreen(
         }
 
         if (!removePeopleOutsideFriends || removedUserIds.isEmpty()) {
-            groupRef.update(updates).addOnSuccessListener { applySuccessfulUpdate() }
+            groupRef
+                .update(updates)
+                .addOnSuccessListener { applySuccessfulUpdate() }
                 .addOnFailureListener { error ->
                     statusMessage = error.message ?: "Could not update group."
                 }
             return
         }
 
-        db.collection("userGroupInvites")
+        db
+            .collection("userGroupInvites")
             .whereEqualTo("groupId", userGroupId)
             .get()
             .addOnSuccessListener { result ->
@@ -645,7 +676,9 @@ fun UserGroupProfileScreen(
                             ),
                         )
                     }
-                batch.commit().addOnSuccessListener { applySuccessfulUpdate() }
+                batch
+                    .commit()
+                    .addOnSuccessListener { applySuccessfulUpdate() }
                     .addOnFailureListener { error ->
                         statusMessage = error.message ?: "Could not update group."
                     }
@@ -709,12 +742,12 @@ fun UserGroupProfileScreen(
             )
         }
 
-        batch.commit()
+        batch
+            .commit()
             .addOnSuccessListener {
                 showCreateEventScreen = false
                 onCreated?.invoke(eventRef.id, newEvent.title)
-            }
-            .addOnFailureListener { error ->
+            }.addOnFailureListener { error ->
                 statusMessage = error.message ?: "Could not create group event."
             }
     }
@@ -724,9 +757,15 @@ fun UserGroupProfileScreen(
         inviteAllGroupMembers: Boolean,
         onCreated: (String, String) -> Unit,
     ) {
-        if (!canCreateBulletinPost || currentUserId.isBlank()) return
+        if (!canCreateBulletinPost || !canCreateGroupEvents || currentUserId.isBlank()) return
 
-        val eventId = db.collection("users").document(currentUserId).collection("personalEvents").document().id
+        val eventId =
+            db
+                .collection("users")
+                .document(currentUserId)
+                .collection("personalEvents")
+                .document()
+                .id
         val now = System.currentTimeMillis()
         val invitedIds =
             if (inviteAllGroupMembers) {
@@ -758,7 +797,8 @@ fun UserGroupProfileScreen(
             )
 
         val personalEventRef =
-            db.collection("users")
+            db
+                .collection("users")
                 .document(currentUserId)
                 .collection("personalEvents")
                 .document(eventId)
@@ -783,11 +823,11 @@ fun UserGroupProfileScreen(
                 ),
             )
         }
-        batch.commit()
+        batch
+            .commit()
             .addOnSuccessListener {
                 onCreated(eventId, newEvent.title)
-            }
-            .addOnFailureListener { error ->
+            }.addOnFailureListener { error ->
                 statusMessage = error.message ?: "Could not create event for bulletin post."
                 showCreateBulletinPostDialog = true
             }
@@ -795,7 +835,8 @@ fun UserGroupProfileScreen(
 
     fun publishBulletinPost() {
         val now = System.currentTimeMillis()
-        groupRef.collection("bulletinPosts")
+        groupRef
+            .collection("bulletinPosts")
             .add(
                 mapOf(
                     "title" to bulletinTitle.trim(),
@@ -811,12 +852,10 @@ fun UserGroupProfileScreen(
                     "createdAt" to now,
                     "updatedAt" to now,
                 ),
-            )
-            .addOnSuccessListener {
+            ).addOnSuccessListener {
                 clearBulletinDraft()
                 showCreateBulletinPostDialog = false
-            }
-            .addOnFailureListener { error ->
+            }.addOnFailureListener { error ->
                 statusMessage = error.message ?: "Could not publish bulletin post."
             }
     }
@@ -836,38 +875,74 @@ fun UserGroupProfileScreen(
         }
 
         val ownerId = event.ownerUserId.ifBlank { currentUserId }
-        val eventRef =
-            if (event.groupId.isNotBlank()) {
-                db.collection("userGroups").document(event.groupId).collection("events").document(event.id)
-            } else {
-                db.collection("users").document(ownerId).collection("personalEvents").document(event.id)
-            }
+        val potentialEventRefs =
+            listOfNotNull(
+                ownerId.takeIf { it.isNotBlank() }?.let {
+                    db.collection("users").document(it).collection("personalEvents").document(event.id)
+                },
+                event.groupId.ifBlank { userGroupId }.takeIf { it.isNotBlank() }?.let {
+                    db.collection("userGroups").document(it).collection("events").document(event.id)
+                },
+            ).distinctBy { it.path }
 
-        val batch = db.batch()
-        batch.update(eventRef, "invitedUserIds", FieldValue.arrayUnion(*inviteeIds.toTypedArray()))
-
-        inviteeIds.forEach { inviteeId ->
-            val inviteRef = db.collection("eventInvites").document("${ownerId}_${event.id}_$inviteeId")
-            batch.set(
-                inviteRef,
-                mapOf(
-                    "eventId" to event.id,
-                    "ownerUserId" to ownerId,
-                    "groupId" to event.groupId.ifBlank { userGroupId },
-                    "fromUserId" to currentUserId,
-                    "toUserId" to inviteeId,
-                    "eventTitle" to event.title,
-                    "status" to "pending",
-                    "createdAt" to System.currentTimeMillis(),
-                ),
-            )
+        if (potentialEventRefs.isEmpty()) {
+            onFinished()
+            return
         }
 
-        batch.commit()
-            .addOnSuccessListener { onFinished() }
-            .addOnFailureListener { error ->
-                statusMessage = error.message ?: "Could not invite group members to this event."
+        val existingRefs = mutableListOf<com.google.firebase.firestore.DocumentReference>()
+        var remainingChecks = potentialEventRefs.size
+
+        fun commitInvites() {
+            val batch = db.batch()
+
+            existingRefs.forEach { ref ->
+                batch.update(ref, "invitedUserIds", FieldValue.arrayUnion(*inviteeIds.toTypedArray()))
             }
+
+            inviteeIds.forEach { inviteeId ->
+                val inviteRef = db.collection("eventInvites").document("${ownerId}_${event.id}_$inviteeId")
+                batch.set(
+                    inviteRef,
+                    mapOf(
+                        "eventId" to event.id,
+                        "ownerUserId" to ownerId,
+                        "groupId" to event.groupId.ifBlank { userGroupId },
+                        "fromUserId" to currentUserId,
+                        "toUserId" to inviteeId,
+                        "eventTitle" to event.title,
+                        "status" to "pending",
+                        "createdAt" to System.currentTimeMillis(),
+                        "updatedAt" to System.currentTimeMillis(),
+                    ),
+                )
+            }
+
+            batch
+                .commit()
+                .addOnSuccessListener { onFinished() }
+                .addOnFailureListener { error ->
+                    statusMessage = error.message ?: "Could not invite group members to this event."
+                }
+        }
+
+        potentialEventRefs.forEach { ref ->
+            ref.get()
+                .addOnSuccessListener { snapshot ->
+                    if (snapshot.exists()) {
+                        existingRefs += ref
+                    }
+                    remainingChecks--
+                    if (remainingChecks == 0) {
+                        commitInvites()
+                    }
+                }.addOnFailureListener {
+                    remainingChecks--
+                    if (remainingChecks == 0) {
+                        commitInvites()
+                    }
+                }
+        }
     }
 
     fun saveBulletinPost() {
@@ -898,7 +973,8 @@ fun UserGroupProfileScreen(
     fun saveBulletinComment(post: UserGroupBulletinPost) {
         if (currentUserId.isBlank() || bulletinCommentDraft.isBlank()) return
 
-        groupRef.collection("bulletinPosts")
+        groupRef
+            .collection("bulletinPosts")
             .document(post.id)
             .collection("comments")
             .add(
@@ -909,11 +985,9 @@ fun UserGroupProfileScreen(
                     "body" to bulletinCommentDraft.trim(),
                     "createdAt" to System.currentTimeMillis(),
                 ),
-            )
-            .addOnSuccessListener {
+            ).addOnSuccessListener {
                 bulletinCommentDraft = ""
-            }
-            .addOnFailureListener { error ->
+            }.addOnFailureListener { error ->
                 statusMessage = error.message ?: "Could not post comment."
             }
     }
@@ -921,15 +995,15 @@ fun UserGroupProfileScreen(
     fun deleteBulletinPost(post: UserGroupBulletinPost) {
         if (!(canManageBulletinPosts || post.authorUserId == currentUserId)) return
 
-        groupRef.collection("bulletinPosts")
+        groupRef
+            .collection("bulletinPosts")
             .document(post.id)
             .delete()
             .addOnSuccessListener {
                 if (selectedBulletinPost?.id == post.id) {
                     selectedBulletinPost = null
                 }
-            }
-            .addOnFailureListener { error ->
+            }.addOnFailureListener { error ->
                 statusMessage = error.message ?: "Could not remove bulletin post."
             }
     }
@@ -1138,31 +1212,33 @@ fun UserGroupProfileScreen(
                                 )
                             } else {
                                 attachableEvents.forEach { event ->
-                                DropdownMenuItem(
-                                    text = { Text(event.title.ifBlank { "Untitled Event" }) },
-                                    onClick = {
-                                        bulletinLinkedEventId = event.id
-                                        bulletinLinkedEventTitle = event.title
-                                        bulletinLinkedEventOwnerUserId = event.ownerUserId
-                                        bulletinLinkedEventGroupId = event.groupId
-                                        bulletinEventMenuExpanded = false
-                                    },
-                                )
-                            }
+                                    DropdownMenuItem(
+                                        text = { Text(event.title.ifBlank { "Untitled Event" }) },
+                                        onClick = {
+                                            bulletinLinkedEventId = event.id
+                                            bulletinLinkedEventTitle = event.title
+                                            bulletinLinkedEventOwnerUserId = event.ownerUserId
+                                            bulletinLinkedEventGroupId = event.groupId
+                                            bulletinEventMenuExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    RippleButton(
-                        text = "Create and Attach New Event",
-                        onClick = {
-                            showCreateBulletinPostDialog = false
-                            showCreateBulletinEventScreen = true
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (canCreateGroupEvents) {
+                        RippleButton(
+                            text = "Create and Attach New Event",
+                            onClick = {
+                                showCreateBulletinPostDialog = false
+                                showCreateBulletinEventScreen = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
 
                     if (bulletinLinkedEventId.isNotBlank()) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -1254,18 +1330,21 @@ fun UserGroupProfileScreen(
             title = { Text("Invite Group Members") },
             text = {
                 Text(
-                    "Invite all group members to ${linkedEvent?.title?.ifBlank { "this event" } ?: "this event"} before publishing the bulletin post?"
+                    "Invite all group members to ${linkedEvent?.title?.ifBlank {
+                        "this event"
+                    } ?: "this event"} before publishing the bulletin post?",
                 )
             },
             confirmButton = {
                 RippleButton(
                     text = "Invite Everyone",
                     onClick = {
-                        val event = linkedEvent ?: run {
-                            showExistingBulletinEventInvitePromptDialog = false
-                            publishBulletinPost()
-                            return@RippleButton
-                        }
+                        val event =
+                            linkedEvent ?: run {
+                                showExistingBulletinEventInvitePromptDialog = false
+                                publishBulletinPost()
+                                return@RippleButton
+                            }
                         showExistingBulletinEventInvitePromptDialog = false
                         inviteGroupMembersToExistingEvent(event) {
                             publishBulletinPost()
@@ -1369,6 +1448,14 @@ fun UserGroupProfileScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         LabeledSwitchRow(
+                            label = "Members can create group events",
+                            checked = editedMembersCanCreateEvents,
+                            onCheckedChange = { editedMembersCanCreateEvents = it },
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LabeledSwitchRow(
                             label = "Members can post to bulletin board",
                             checked = editedMembersCanPostBulletin,
                             onCheckedChange = { editedMembersCanPostBulletin = it },
@@ -1411,17 +1498,10 @@ fun UserGroupProfileScreen(
                                     },
                                 )
                                 PermissionToggleRow(
-                                    label = "Admins can promote admins",
+                                    label = "Admins can promote users",
                                     checked = editedAdminPermissions.canPromoteAdmins,
                                     onCheckedChange = {
                                         editedAdminPermissions = editedAdminPermissions.copy(canPromoteAdmins = it)
-                                    },
-                                )
-                                PermissionToggleRow(
-                                    label = "Admins can create events",
-                                    checked = editedAdminPermissions.canCreateEvents,
-                                    onCheckedChange = {
-                                        editedAdminPermissions = editedAdminPermissions.copy(canCreateEvents = it)
                                     },
                                 )
                                 PermissionToggleRow(
@@ -1590,14 +1670,15 @@ fun UserGroupProfileScreen(
                 )
             },
             onPostComment = { saveBulletinComment(post) },
-            onDeletePost = if (canManageBulletinPosts || post.authorUserId == currentUserId) {
-                {
-                    deleteBulletinPost(post)
-                    selectedBulletinPost = null
-                }
-            } else {
-                null
-            },
+            onDeletePost =
+                if (canManageBulletinPosts || post.authorUserId == currentUserId) {
+                    {
+                        deleteBulletinPost(post)
+                        selectedBulletinPost = null
+                    }
+                } else {
+                    null
+                },
         )
         return
     }
@@ -1746,8 +1827,14 @@ fun UserGroupProfileScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         when {
-            !canSeePastEvents -> Text("Past events are restricted to group leadership.")
-            pastGroupEvents.isEmpty() -> Text("No past group events.")
+            !canSeePastEvents -> {
+                Text("Past events are restricted to group leadership.")
+            }
+
+            pastGroupEvents.isEmpty() -> {
+                Text("No past group events.")
+            }
+
             else -> {
                 pastGroupEvents.forEach { event ->
                     PersonalEventCard(
@@ -1774,35 +1861,36 @@ fun UserGroupProfileScreen(
                         else -> "Member"
                     }
 
-                val memberActions = buildList {
-                    if (canPromoteAdmins && member.id != currentUserId && member.id != ownerUserId) {
-                        if (adminIds.contains(member.id)) {
+                val memberActions =
+                    buildList {
+                        if (canPromoteAdmins && member.id != currentUserId && member.id != ownerUserId) {
+                            if (adminIds.contains(member.id)) {
+                                add(
+                                    UserActionMenuItem(
+                                        label = "Remove Admin",
+                                        onClick = { demoteAdmin(member.id) },
+                                    ),
+                                )
+                            } else {
+                                add(
+                                    UserActionMenuItem(
+                                        label = "Make Admin",
+                                        onClick = { promoteToAdmin(member.id) },
+                                    ),
+                                )
+                            }
+                        }
+
+                        if (canKickMembers && member.id != currentUserId && member.id != ownerUserId) {
                             add(
                                 UserActionMenuItem(
-                                    label = "Remove Admin",
-                                    onClick = { demoteAdmin(member.id) },
-                                ),
-                            )
-                        } else {
-                            add(
-                                UserActionMenuItem(
-                                    label = "Make Admin",
-                                    onClick = { promoteToAdmin(member.id) },
+                                    label = "Kick from Group",
+                                    onClick = { kickMember(member.id) },
+                                    destructive = true,
                                 ),
                             )
                         }
                     }
-
-                    if (canKickMembers && member.id != currentUserId && member.id != ownerUserId) {
-                        add(
-                            UserActionMenuItem(
-                                label = "Kick from Group",
-                                onClick = { kickMember(member.id) },
-                                destructive = true,
-                            ),
-                        )
-                    }
-                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1839,6 +1927,7 @@ fun UserGroupProfileScreen(
                     editedGroupProfilePictureUrl = safeProfile.profilePictureUrl
                     editedGroupVisibility = safeProfile.visibility
                     editedMembersCanInvite = safeProfile.membersCanInvite
+                    editedMembersCanCreateEvents = safeProfile.membersCanCreateEvents
                     editedMembersCanPostBulletin = safeProfile.membersCanPostBulletin
                     editedBulletinVisibility = safeProfile.bulletinVisibility
                     editedEventDefaultVisibility = safeProfile.eventDefaultVisibility
@@ -1904,7 +1993,6 @@ private fun BulletinPostProfileScreen(
 
         ProfileHeader(
             title = post.title.ifBlank { "Untitled Post" },
-            imageUrl = post.imageUrl,
             placeholderIcon = Icons.AutoMirrored.Filled.Article,
             subtitle = {
                 Text(
@@ -1918,6 +2006,20 @@ private fun BulletinPostProfileScreen(
             text = post.description.ifBlank { "No details provided." },
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        if (post.imageUrl.isNotBlank()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            AsyncImage(
+                model = post.imageUrl,
+                contentDescription = "Post image",
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .clip(MaterialTheme.shapes.large),
+            )
+        }
 
         if (post.linkedEventId.isNotBlank()) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -2000,6 +2102,20 @@ private fun BulletinPostCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            if (post.imageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = post.imageUrl,
+                    contentDescription = "Post thumbnail",
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(84.dp)
+                            .clip(MaterialTheme.shapes.medium),
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
             Text(
                 text = post.title.ifBlank { "Untitled Post" },
                 style = MaterialTheme.typography.titleMedium,
@@ -2020,14 +2136,6 @@ private fun BulletinPostCard(
                 text = "Posted by ${post.authorName.ifBlank { "Unknown member" }}",
                 style = MaterialTheme.typography.labelMedium,
             )
-            if (post.imageUrl.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Includes image",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
             if (post.linkedEventId.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2146,7 +2254,8 @@ private fun fetchUsersByIds(
     var remaining = chunks.size
 
     chunks.forEach { chunk ->
-        db.collection("users")
+        db
+            .collection("users")
             .whereIn(FieldPath.documentId(), chunk)
             .get()
             .addOnSuccessListener { result ->
@@ -2155,8 +2264,7 @@ private fun fetchUsersByIds(
                 if (remaining == 0) {
                     onResult(collected.distinctBy { it.id }.sortedBy { ids.indexOf(it.id) })
                 }
-            }
-            .addOnFailureListener {
+            }.addOnFailureListener {
                 remaining--
                 if (remaining == 0) {
                     onResult(collected.distinctBy { it.id }.sortedBy { ids.indexOf(it.id) })

@@ -62,7 +62,6 @@ val GroupVisibilityOptions =
         VisibilityOption("public", "Public", "Anyone can find this group."),
         VisibilityOption("friends", "Friends", "Only friends can find this group."),
         VisibilityOption("members", "Members", "Only members can view this group."),
-        VisibilityOption("private", "Private", "Only admins can view this group."),
     )
 
 val PastGroupEventsVisibilityOptions =
