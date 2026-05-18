@@ -75,6 +75,7 @@ fun MainApp(
     var routeStack by remember { mutableStateOf<List<AppRoute>>(emptyList()) }
     var profileTitlesByUserId by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var isBackNavigation by remember { mutableStateOf(false) }
+    var nestedBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var requestedFriendsTab by remember { mutableStateOf<Int?>(null) }
     var showClearChatDialog by remember { mutableStateOf(false) }
     val route = routeStack.lastOrNull() ?: AppRoute.MainTabs
@@ -200,7 +201,14 @@ fun MainApp(
                         )
                     } else {
                         IconButton(
-                            onClick = { popRoute() },
+                            onClick = {
+                                val handledNestedBack = nestedBackHandler
+                                if (handledNestedBack != null) {
+                                    handledNestedBack()
+                                } else {
+                                    popRoute()
+                                }
+                            },
                             modifier =
                                 Modifier
                                     .align(Alignment.CenterStart)
@@ -458,6 +466,9 @@ fun MainApp(
                         UserGroupProfileScreen(
                             userGroupId = currentRoute.userGroupId,
                             onBack = { popRoute() },
+                            onRegisterNestedBackHandler = { handler ->
+                                nestedBackHandler = handler
+                            },
                             onOpenUserProfile = { userId ->
                                 navigateToUserProfile(userId)
                             },

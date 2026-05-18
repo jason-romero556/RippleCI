@@ -92,6 +92,7 @@ import com.google.firebase.storage.storage
 fun UserGroupProfileScreen(
     userGroupId: String,
     onBack: () -> Unit,
+    onRegisterNestedBackHandler: (((() -> Unit)?) -> Unit) = {},
     onOpenUserProfile: (String) -> Unit,
     onOpenEventProfile: (String, String, String) -> Unit,
 ) {
@@ -247,9 +248,16 @@ fun UserGroupProfileScreen(
 
     DisposableEffect(selectedBulletinPost?.id) {
         val postId = selectedBulletinPost?.id
+        onRegisterNestedBackHandler(
+            if (postId.isNullOrBlank()) {
+                null
+            } else {
+                { selectedBulletinPost = null }
+            },
+        )
         if (postId.isNullOrBlank()) {
             selectedBulletinComments = emptyList()
-            onDispose { }
+            onDispose { onRegisterNestedBackHandler(null) }
         } else {
             val registration =
                 groupRef
@@ -262,7 +270,10 @@ fun UserGroupProfileScreen(
                             snapshot?.documents?.map { it.toUserGroupBulletinComment() } ?: emptyList()
                     }
 
-            onDispose { registration.remove() }
+            onDispose {
+                registration.remove()
+                onRegisterNestedBackHandler(null)
+            }
         }
     }
 
@@ -1983,14 +1994,6 @@ private fun BulletinPostProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
     ) {
-        RippleOutlinedButton(
-            text = "Back to $groupName",
-            onClick = onBack,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         ProfileHeader(
             title = post.title.ifBlank { "Untitled Post" },
             placeholderIcon = Icons.AutoMirrored.Filled.Article,
