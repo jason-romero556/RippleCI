@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.ui.components.EventAttendeeVisibilityOptions
 import com.example.rippleci.ui.components.EventVisibilityOptions
 import com.example.rippleci.ui.components.ImageUploadControls
 import com.example.rippleci.ui.components.RippleButton
@@ -69,6 +70,7 @@ fun CreatePersonalEventScreen(
     visibilityOptions: List<VisibilityOption> = EventVisibilityOptions,
     defaultVisibility: String = visibilityOptions.firstOrNull()?.value ?: "public",
     canEditVisibility: Boolean = true,
+    attendeeVisibilityTitle: String = "Attendee Visibility",
     onSave: (PersonalEvent) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
@@ -100,6 +102,9 @@ fun CreatePersonalEventScreen(
     var visibility by remember(initialEvent?.id) { mutableStateOf(initialEvent?.visibility ?: defaultVisibility) }
     var inviteesCanInvite by remember(initialEvent?.id) {
         mutableStateOf(initialEvent?.inviteesCanInvite ?: false)
+    }
+    var attendeeVisibility by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.attendeeVisibility ?: "full")
     }
     var statusMessage by remember { mutableStateOf("") }
 
@@ -364,6 +369,15 @@ fun CreatePersonalEventScreen(
             )
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        VisibilitySelector(
+            title = attendeeVisibilityTitle,
+            selectedValue = attendeeVisibility,
+            options = EventAttendeeVisibilityOptions,
+            onValueChange = { attendeeVisibility = it },
+        )
+
         if (statusMessage.isNotBlank()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(statusMessage, color = MaterialTheme.colorScheme.error)
@@ -415,6 +429,7 @@ fun CreatePersonalEventScreen(
                                 attendeeIds = initialEvent?.attendeeIds.orEmpty(),
                                 invitedUserIds = initialEvent?.invitedUserIds.orEmpty(),
                                 inviteesCanInvite = inviteesCanInvite,
+                                attendeeVisibility = attendeeVisibility,
                                 blockedUserIds = initialEvent?.blockedUserIds.orEmpty(),
                                 imageUrl = imageUrl.trim(),
                             ),

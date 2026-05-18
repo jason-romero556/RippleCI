@@ -1,5 +1,9 @@
 package com.example.rippleci.data.models
 
+const val EVENT_ATTENDEE_VISIBILITY_FULL = "full"
+const val EVENT_ATTENDEE_VISIBILITY_COUNT = "count"
+const val EVENT_ATTENDEE_VISIBILITY_NONE = "none"
+
 data class PersonalEvent(
     val id: String = "",
     val title: String = "",
@@ -17,6 +21,7 @@ data class PersonalEvent(
     val attendeeIds: List<String> = emptyList(),
     val invitedUserIds: List<String> = emptyList(),
     val inviteesCanInvite: Boolean = false,
+    val attendeeVisibility: String = EVENT_ATTENDEE_VISIBILITY_FULL,
     val blockedUserIds: List<String> = emptyList(),
     val imageUrl: String = "",
 )

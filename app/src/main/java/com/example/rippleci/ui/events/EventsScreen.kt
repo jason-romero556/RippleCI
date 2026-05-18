@@ -304,6 +304,7 @@ fun EventsScreen(
                             "attendeeIds" to listOf(uid),
                             "invitedUserIds" to emptyList<String>(),
                             "inviteesCanInvite" to newEvent.inviteesCanInvite,
+                            "attendeeVisibility" to newEvent.attendeeVisibility,
                             "blockedUserIds" to emptyList<String>(),
                             "imageUrl" to newEvent.imageUrl,
                             "visibility" to newEvent.visibility,

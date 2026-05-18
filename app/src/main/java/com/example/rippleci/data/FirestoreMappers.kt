@@ -17,6 +17,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 
 fun DocumentSnapshot.toUserProfile(): UserProfile {
     val classYear = getString("classYear").orEmpty()
+    val visibility = getString("visibility") ?: "public"
     val classes =
         (get("classes") as? List<*>)
             ?.mapNotNull { it as? String }
@@ -36,7 +37,11 @@ fun DocumentSnapshot.toUserProfile(): UserProfile {
         presenceMode = getString("presenceMode").orEmpty().ifBlank { "automatic" },
         presenceStatus = getString("presenceStatus").orEmpty().ifBlank { "closed" },
         presenceUpdatedAt = getLong("presenceUpdatedAt") ?: 0L,
-        visibility = getString("visibility") ?: "public",
+        visibility = visibility,
+        friendsVisibility = getString("friendsVisibility") ?: visibility,
+        eventsVisibility = getString("eventsVisibility") ?: visibility,
+        groupsVisibility = getString("groupsVisibility") ?: visibility,
+        clubsVisibility = getString("clubsVisibility") ?: visibility,
         messagePrivacy = getString("messagePrivacy") ?: MESSAGE_PRIVACY_FRIENDS,
     )
 }
@@ -69,6 +74,7 @@ fun DocumentSnapshot.toPersonalEvent(): PersonalEvent =
         attendeeIds = (get("attendeeIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         invitedUserIds = (get("invitedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         inviteesCanInvite = getBoolean("inviteesCanInvite") ?: false,
+        attendeeVisibility = getString("attendeeVisibility") ?: "full",
         blockedUserIds = (get("blockedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
         imageUrl = getString("imageUrl").orEmpty().ifBlank { getString("profilePictureUrl").orEmpty() },
     )

@@ -64,6 +64,7 @@ import com.example.rippleci.data.UserPresence
 import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.MESSAGE_PRIVACY_FRIENDS
 import com.example.rippleci.ui.components.ProfileVisibilityOptions
+import com.example.rippleci.ui.components.ProfileSectionVisibilityOptions
 import com.example.rippleci.ui.components.RippleButton
 import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.VisibilitySelector
@@ -98,6 +99,10 @@ fun ProfileScreen(
     var statusMessage by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var visibility by remember { mutableStateOf("public") }
+    var friendsVisibility by remember { mutableStateOf("public") }
+    var eventsVisibility by remember { mutableStateOf("public") }
+    var groupsVisibility by remember { mutableStateOf("public") }
+    var clubsVisibility by remember { mutableStateOf("public") }
     var messagePrivacy by remember { mutableStateOf(MESSAGE_PRIVACY_FRIENDS) }
     var presenceMode by remember { mutableStateOf(UserPresence.AUTOMATIC) }
     var classExpanded by remember { mutableStateOf(false) }
@@ -184,6 +189,10 @@ fun ProfileScreen(
                             ?: ""
                     profilePictureUrl = doc.getString("profilePictureUrl") ?: ""
                     visibility = doc.getString("visibility") ?: "public"
+                    friendsVisibility = doc.getString("friendsVisibility") ?: visibility
+                    eventsVisibility = doc.getString("eventsVisibility") ?: visibility
+                    groupsVisibility = doc.getString("groupsVisibility") ?: visibility
+                    clubsVisibility = doc.getString("clubsVisibility") ?: visibility
                     messagePrivacy = doc.getString("messagePrivacy") ?: MESSAGE_PRIVACY_FRIENDS
                     presenceMode = doc.getString("presenceMode") ?: UserPresence.AUTOMATIC
                 }
@@ -446,6 +455,42 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            VisibilitySelector(
+                title = "Friends List Visibility",
+                selectedValue = friendsVisibility,
+                options = ProfileSectionVisibilityOptions,
+                onValueChange = { friendsVisibility = it },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            VisibilitySelector(
+                title = "Events Visibility",
+                selectedValue = eventsVisibility,
+                options = ProfileSectionVisibilityOptions,
+                onValueChange = { eventsVisibility = it },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            VisibilitySelector(
+                title = "Groups Visibility",
+                selectedValue = groupsVisibility,
+                options = ProfileSectionVisibilityOptions,
+                onValueChange = { groupsVisibility = it },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            VisibilitySelector(
+                title = "Clubs Visibility",
+                selectedValue = clubsVisibility,
+                options = ProfileSectionVisibilityOptions,
+                onValueChange = { clubsVisibility = it },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             ExposedDropdownMenuBox(
                 expanded = messagePrivacyExpanded,
                 onExpandedChange = { messagePrivacyExpanded = !messagePrivacyExpanded },
@@ -533,6 +578,10 @@ fun ProfileScreen(
                                 "classes" to classValues,
                                 "profilePictureUrl" to profilePictureUrl,
                                 "visibility" to visibility,
+                                "friendsVisibility" to friendsVisibility,
+                                "eventsVisibility" to eventsVisibility,
+                                "groupsVisibility" to groupsVisibility,
+                                "clubsVisibility" to clubsVisibility,
                                 "messagePrivacy" to messagePrivacy,
                                 "presenceMode" to presenceMode,
                                 "presenceStatus" to UserPresence.statusForMode(presenceMode),

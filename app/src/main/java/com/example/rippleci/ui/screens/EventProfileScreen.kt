@@ -33,7 +33,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.canViewEvent
+import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.isPastEvent
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_COUNT
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_FULL
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_NONE
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
@@ -104,6 +108,7 @@ fun EventProfileScreen(
     var attendeeProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var attendeesExpanded by remember { mutableStateOf(false) }
     var inviteesCanInvite by remember { mutableStateOf(false) }
+    var attendeeVisibility by remember { mutableStateOf(EVENT_ATTENDEE_VISIBILITY_FULL) }
     var pendingInviteSettingUpdate by remember { mutableStateOf<PersonalEvent?>(null) }
     var showDisableOpenInvitesDialog by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf(emptyList<String>()) }
@@ -151,6 +156,8 @@ fun EventProfileScreen(
                 clubId = doc.getString("clubId").orEmpty()
                 visibility = doc.getString("visibility") ?: "public"
                 inviteesCanInvite = doc.getBoolean("inviteesCanInvite") ?: false
+                attendeeVisibility =
+                    doc.getString("attendeeVisibility") ?: EVENT_ATTENDEE_VISIBILITY_FULL
                 eventLoaded = true
 
                 val loadedOwnerUserId =
@@ -436,6 +443,7 @@ fun EventProfileScreen(
                 "imageUrl" to updatedEvent.imageUrl,
                 "visibility" to updatedEvent.visibility,
                 "inviteesCanInvite" to updatedEvent.inviteesCanInvite,
+                "attendeeVisibility" to updatedEvent.attendeeVisibility,
             )
 
         if (removePeopleOutsideFriends) {
@@ -455,6 +463,7 @@ fun EventProfileScreen(
             imageUrl = updatedEvent.imageUrl
             visibility = updatedEvent.visibility
             inviteesCanInvite = updatedEvent.inviteesCanInvite
+            attendeeVisibility = updatedEvent.attendeeVisibility
             attendeeIds = updatedAttendeeIds
             invitedUserIds = updatedInvitedUserIds
             showEditEventScreen = false
@@ -873,6 +882,7 @@ fun EventProfileScreen(
             attendeeIds = attendeeIds,
             invitedUserIds = invitedUserIds,
             inviteesCanInvite = inviteesCanInvite,
+            attendeeVisibility = attendeeVisibility,
             blockedUserIds = blockedUserIds,
             imageUrl = imageUrl,
         )
@@ -940,20 +950,38 @@ fun EventProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text("${attendeeIds.size} attending")
+        val visibleAttendeeIds =
+            attendeeIds.filter { attendeeId ->
+                val attendee = attendeeProfiles.firstOrNull { it.id == attendeeId }
+                attendee != null && canViewProfile(attendee, currentUserId, currentUserFriendIds.orEmpty())
+            }
 
-        if (attendeeIds.isEmpty()) {
-            Text("No attendees yet.", color = MaterialTheme.colorScheme.secondary)
-        } else {
-            TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
-                Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
+        when (attendeeVisibility) {
+            EVENT_ATTENDEE_VISIBILITY_NONE -> {
+                Text("Attendees are hidden for this event.", color = MaterialTheme.colorScheme.secondary)
+            }
+
+            EVENT_ATTENDEE_VISIBILITY_COUNT -> {
+                Text("${attendeeIds.size} attending")
+            }
+
+            else -> {
+                Text("${attendeeIds.size} attending")
+
+                if (attendeeIds.isEmpty()) {
+                    Text("No attendees yet.", color = MaterialTheme.colorScheme.secondary)
+                } else {
+                    TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
+                        Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
+                    }
+                }
             }
         }
 
-        if (attendeesExpanded && attendeeIds.isNotEmpty()) {
+        if (attendeeVisibility == EVENT_ATTENDEE_VISIBILITY_FULL && attendeesExpanded && attendeeIds.isNotEmpty()) {
             val attendeeById = attendeeProfiles.associateBy { it.id }
 
-            attendeeIds.forEach { attendeeId ->
+            visibleAttendeeIds.forEach { attendeeId ->
                 val attendee = attendeeById[attendeeId]
                 val attendeeName =
                     attendee
@@ -999,6 +1027,13 @@ fun EventProfileScreen(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (visibleAttendeeIds.isEmpty()) {
+                Text(
+                    "Only the attendee count is visible because attendee profiles are private.",
+                    color = MaterialTheme.colorScheme.secondary,
+                )
             }
         }
 

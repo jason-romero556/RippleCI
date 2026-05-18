@@ -51,6 +51,7 @@ import com.example.rippleci.data.canViewGroupProfile
 import com.example.rippleci.data.canViewPastGroupEvents
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.isPastEvent
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_FULL
 import com.example.rippleci.data.models.GROUP_PAST_EVENTS_ADMINS
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.UserGroupAdminPermissions
@@ -681,6 +682,7 @@ fun UserGroupProfileScreen(
                 "attendeeIds" to emptyList<String>(),
                 "blockedUserIds" to emptyList<String>(),
                 "inviteesCanInvite" to newEvent.inviteesCanInvite,
+                "attendeeVisibility" to newEvent.attendeeVisibility,
                 "visibility" to newEvent.visibility,
                 "createdAt" to System.currentTimeMillis(),
                 "ownerUserId" to currentUserId,
@@ -748,6 +750,7 @@ fun UserGroupProfileScreen(
                 "attendeeIds" to emptyList<String>(),
                 "blockedUserIds" to emptyList<String>(),
                 "inviteesCanInvite" to newEvent.inviteesCanInvite,
+                "attendeeVisibility" to newEvent.attendeeVisibility,
                 "visibility" to newEvent.visibility,
                 "createdAt" to now,
                 "ownerUserId" to currentUserId,
@@ -879,6 +882,11 @@ fun UserGroupProfileScreen(
             return
         }
 
+        if (linkedEvent != null && linkedEvent.ownerUserId != currentUserId && !linkedEvent.inviteesCanInvite) {
+            statusMessage = "Only the event owner can attach that event because invitees cannot invite friends."
+            return
+        }
+
         if (linkedEvent != null) {
             showExistingBulletinEventInvitePromptDialog = true
             return
@@ -989,6 +997,9 @@ fun UserGroupProfileScreen(
             .distinctBy { it.id }
             .filter { it.id.isNotBlank() }
             .filterNot { it.isPastEvent(nowMillis) }
+            .filter { event ->
+                event.ownerUserId == currentUserId || event.inviteesCanInvite
+            }
     val canShowManageGroup = canEditAnyGroupSettings || canInviteToGroup || canCreateGroupEvents || isMember
 
     if (showCreateBulletinEventScreen) {

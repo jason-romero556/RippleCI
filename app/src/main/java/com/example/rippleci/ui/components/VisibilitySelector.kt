@@ -26,6 +26,13 @@ val ProfileVisibilityOptions =
         VisibilityOption("private", "Private", "Only you can view this."),
     )
 
+val ProfileSectionVisibilityOptions =
+    listOf(
+        VisibilityOption("public", "Public", "Anyone who can open your profile can view this section."),
+        VisibilityOption("friends", "Friends", "Only friends can view this section."),
+        VisibilityOption("private", "Private", "Only you can view this section."),
+    )
+
 val EventVisibilityOptions =
     listOf(
         VisibilityOption("public", "Public", "Anyone can view this event."),
@@ -41,6 +48,13 @@ val GroupEventVisibilityOptions =
         VisibilityOption("members", "Members", "Only group members can view this event."),
         VisibilityOption("attendees", "Attendees", "Only invited or attending people can view this event."),
         VisibilityOption("private", "Private", "Only group leadership can view this event."),
+    )
+
+val EventAttendeeVisibilityOptions =
+    listOf(
+        VisibilityOption("full", "Show Attendees", "Display the attendee count and the attendee list."),
+        VisibilityOption("count", "Count Only", "Display only the number of attendees."),
+        VisibilityOption("none", "Hide Attendees", "Hide both the attendee count and attendee list."),
     )
 
 val GroupVisibilityOptions =

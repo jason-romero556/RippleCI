@@ -27,6 +27,16 @@ fun canViewGroupProfile(
         profile.visibility == "public" ||
         (profile.visibility == "friends" && currentUserFriendIds.contains(profile.ownerUserId))
 
+fun canViewProfileSection(
+    sectionVisibility: String,
+    profileOwnerId: String,
+    currentUserId: String,
+    currentUserFriendIds: List<String>,
+): Boolean =
+    currentUserId == profileOwnerId ||
+        sectionVisibility == "public" ||
+        (sectionVisibility == "friends" && currentUserFriendIds.contains(profileOwnerId))
+
 fun canViewPastGroupEvents(
     profile: UserGroupProfile,
     currentUserId: String,

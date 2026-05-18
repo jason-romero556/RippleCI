@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.canViewEvent
 import com.example.rippleci.data.canViewProfile
+import com.example.rippleci.data.canViewProfileSection
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.isPastEvent
@@ -458,6 +459,34 @@ fun UserProfileScreen(
         friendProfiles.filter { friend ->
             friend.id !in hiddenUserIds
         }
+    val canViewFriendsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.friendsVisibility,
+            profileOwnerId = userId,
+            currentUserId = currentUserId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+        )
+    val canViewEventsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.eventsVisibility,
+            profileOwnerId = userId,
+            currentUserId = currentUserId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+        )
+    val canViewGroupsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.groupsVisibility,
+            profileOwnerId = userId,
+            currentUserId = currentUserId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+        )
+    val canViewClubsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.clubsVisibility,
+            profileOwnerId = userId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+            currentUserId = currentUserId,
+        )
     val displayName = userProfile.name.ifBlank { userProfile.email.ifBlank { "Unknown User" } }
     val canMessageUser =
         currentUserId != userId &&
@@ -530,9 +559,9 @@ fun UserProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (visibleFriendProfiles.isEmpty()) {
+        if (canViewFriendsSection && visibleFriendProfiles.isEmpty()) {
             Text("No friends yet")
-        } else {
+        } else if (canViewFriendsSection) {
             CollapsibleSection(
                 title = "Friends List",
                 expanded = isFriendListExpanded,
@@ -557,13 +586,12 @@ fun UserProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (visiblePersonalEvents.isEmpty()) {
+        if (canViewEventsSection && visiblePersonalEvents.isEmpty()) {
             Text("No visible attending events.")
-        } else if (upcomingVisibleEvents.isEmpty()) {
+        } else if (canViewEventsSection && upcomingVisibleEvents.isEmpty()) {
             Text("No upcoming visible events.")
 
             if (pastVisibleEvents.isNotEmpty()) {
@@ -590,7 +618,7 @@ fun UserProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
-        } else {
+        } else if (canViewEventsSection) {
             Spacer(modifier = Modifier.height(16.dp))
 
             CollapsibleSection(
@@ -642,49 +670,52 @@ fun UserProfileScreen(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (canViewGroupsSection) {
+            CollapsibleSection(
+                title = "Groups",
+                expanded = isGroupListExpanded,
+                onToggle = { isGroupListExpanded = !isGroupListExpanded },
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-        CollapsibleSection(
-            title = "Groups",
-            expanded = isGroupListExpanded,
-            onToggle = { isGroupListExpanded = !isGroupListExpanded },
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (userGroups.isEmpty()) {
-                Text("No groups yet.")
-            } else {
-                userGroups.forEach { group ->
-                    RippleButton(
-                        text = "${group.name.ifBlank { "Unnamed Group" }} (${group.memberIds.size} members)",
-                        onClick = { onOpenUserGroupProfile(group.id) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                if (userGroups.isEmpty()) {
+                    Text("No groups yet.")
+                } else {
+                    userGroups.forEach { group ->
+                        RippleButton(
+                            text = "${group.name.ifBlank { "Unnamed Group" }} (${group.memberIds.size} members)",
+                            onClick = { onOpenUserGroupProfile(group.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (canViewClubsSection) {
+            CollapsibleSection(
+                title = "Clubs",
+                expanded = isClubListExpanded,
+                onToggle = { isClubListExpanded = !isClubListExpanded },
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-        CollapsibleSection(
-            title = "Clubs",
-            expanded = isClubListExpanded,
-            onToggle = { isClubListExpanded = !isClubListExpanded },
-        ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (userProfile.clubIds.isEmpty()) {
-                Text("No clubs listed.")
-            } else {
-                userProfile.clubIds.forEach { clubId ->
-                    ClubLinkRow(
-                        label = clubId,
-                        onClick = { onOpenClubProfile(clubId) },
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                if (userProfile.clubIds.isEmpty()) {
+                    Text("No clubs listed.")
+                } else {
+                    userProfile.clubIds.forEach { clubId ->
+                        ClubLinkRow(
+                            label = clubId,
+                            onClick = { onOpenClubProfile(clubId) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
         }
