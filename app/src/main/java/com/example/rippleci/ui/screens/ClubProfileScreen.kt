@@ -24,6 +24,8 @@ import com.example.rippleci.data.models.ClubProfile
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ProfileHeader
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.UserActionMenuButton
 import com.example.rippleci.ui.components.UserActionMenuItem
 import com.google.firebase.Firebase
@@ -205,13 +207,9 @@ fun ClubProfileScreen(
             },
             actions = {
                 if (currentUserIsMember) {
-                    OutlinedButton(onClick = { leaveClub() }) {
-                        Text("Leave")
-                    }
+                    RippleOutlinedButton(text = "Leave", onClick = { leaveClub() })
                 } else {
-                    Button(onClick = { joinClub() }) {
-                        Text("Join")
-                    }
+                    RippleButton(text = "Join", onClick = { joinClub() })
                 }
             }
         )
@@ -239,12 +237,11 @@ fun ClubProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = memberName,
                     onClick = { onOpenUserProfile(memberId) },
                     modifier = Modifier.weight(1f),
-                ) {
-                    Text(memberName)
-                }
+                )
 
                 if (canManageClub && memberId != currentUserId && memberId != clubProfile.ownerUserId) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -285,12 +282,11 @@ fun ClubProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedButton(
+                    RippleOutlinedButton(
+                        text = blockedName,
                         onClick = { onOpenUserProfile(blockedUserId) },
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Text(blockedName)
-                    }
+                    )
 
                     Spacer(modifier = Modifier.width(8.dp))
 

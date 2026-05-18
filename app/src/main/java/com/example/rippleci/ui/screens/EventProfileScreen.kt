@@ -3,6 +3,7 @@ package com.example.rippleci.ui.screens
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -30,14 +33,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.canViewEvent
+import com.example.rippleci.data.canViewProfile
 import com.example.rippleci.data.isPastEvent
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_COUNT
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_FULL
+import com.example.rippleci.data.models.EVENT_ATTENDEE_VISIBILITY_NONE
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
+import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.EventVisibilityOptions
+import com.example.rippleci.ui.components.GroupEventVisibilityOptions
 import com.example.rippleci.ui.components.ProfileHeader
 import com.example.rippleci.ui.components.ProfileInfoRow
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.UserActionMenuButton
 import com.example.rippleci.ui.components.UserActionMenuItem
 import com.example.rippleci.ui.components.UserLinkRow
@@ -46,6 +58,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.firestore
 
 @Composable
@@ -88,16 +101,25 @@ fun EventProfileScreen(
     var clubId by remember { mutableStateOf("") }
     var createdByUserId by remember { mutableStateOf("") }
     var creatorProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var groupProfile by remember { mutableStateOf<UserGroupProfile?>(null) }
     var visibility by remember { mutableStateOf("public") }
     var eventLoaded by remember { mutableStateOf(false) }
     var currentUserFriendIds by remember { mutableStateOf<List<String>?>(null) }
     var attendeeProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var attendeesExpanded by remember { mutableStateOf(false) }
     var inviteesCanInvite by remember { mutableStateOf(false) }
+    var attendeeVisibility by remember { mutableStateOf(EVENT_ATTENDEE_VISIBILITY_FULL) }
     var pendingInviteSettingUpdate by remember { mutableStateOf<PersonalEvent?>(null) }
     var showDisableOpenInvitesDialog by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf(emptyList<String>()) }
     var blockedUserProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var currentUserGroups by remember { mutableStateOf<List<UserGroupProfile>>(emptyList()) }
+    var groupMemberProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var selectedInviteGroupProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var inviteSource by remember { mutableStateOf("friends") }
+    var inviteSourceMenuExpanded by remember { mutableStateOf(false) }
+    var inviteGroupMenuExpanded by remember { mutableStateOf(false) }
+    var selectedInviteGroupId by remember { mutableStateOf("") }
 
     val eventRef =
         if (groupId.isNotBlank()) {
@@ -134,6 +156,8 @@ fun EventProfileScreen(
                 clubId = doc.getString("clubId").orEmpty()
                 visibility = doc.getString("visibility") ?: "public"
                 inviteesCanInvite = doc.getBoolean("inviteesCanInvite") ?: false
+                attendeeVisibility =
+                    doc.getString("attendeeVisibility") ?: EVENT_ATTENDEE_VISIBILITY_FULL
                 eventLoaded = true
 
                 val loadedOwnerUserId =
@@ -187,6 +211,7 @@ fun EventProfileScreen(
                 groupAdminIds = (doc.get("adminIds") as? List<*>)
                     ?.mapNotNull { it as? String }
                     ?: emptyList()
+                groupProfile = if (doc.exists()) doc.toUserGroupProfile() else null
             }
     }
 
@@ -208,13 +233,29 @@ fun EventProfileScreen(
                 if (friendIds.isEmpty()) {
                     friendProfiles = emptyList()
                 } else {
-                    db
-                        .collection("users")
-                        .whereIn(FieldPath.documentId(), friendIds.take(10))
-                        .get()
-                        .addOnSuccessListener { result ->
-                            friendProfiles = result.documents.map { it.toUserProfile() }
-                        }
+                    friendProfiles = emptyList()
+
+                    friendIds.distinct().chunked(10).forEach { chunk ->
+                        db.collection("users")
+                            .whereIn(FieldPath.documentId(), chunk)
+                            .get()
+                            .addOnSuccessListener { result ->
+                                friendProfiles =
+                                    (friendProfiles + result.documents.map { it.toUserProfile() })
+                                        .distinctBy { it.id }
+                                        .sortedBy { friendIds.indexOf(it.id) }
+                            }
+                    }
+                }
+            }
+
+        db.collection("userGroups")
+            .whereArrayContains("memberIds", currentUserId)
+            .get()
+            .addOnSuccessListener { result ->
+                currentUserGroups = result.documents.map { it.toUserGroupProfile() }
+                if (selectedInviteGroupId.isBlank()) {
+                    selectedInviteGroupId = currentUserGroups.firstOrNull()?.id.orEmpty()
                 }
             }
     }
@@ -251,11 +292,38 @@ fun EventProfileScreen(
         }
     }
 
-    fun canManageLoadedEvent(): Boolean {
+    LaunchedEffect(groupProfile?.memberIds) {
+        if (groupId.isBlank()) {
+            groupMemberProfiles = emptyList()
+            return@LaunchedEffect
+        }
+
+        fetchEventUsersByIds(db, groupProfile?.memberIds.orEmpty()) { loadedProfiles ->
+            groupMemberProfiles = loadedProfiles
+        }
+    }
+
+    LaunchedEffect(currentUserGroups, selectedInviteGroupId) {
+        val selectedGroup = currentUserGroups.firstOrNull { it.id == selectedInviteGroupId }
+        fetchEventUsersByIds(db, selectedGroup?.memberIds.orEmpty()) { loadedProfiles ->
+            selectedInviteGroupProfiles = loadedProfiles
+        }
+    }
+
+    fun canEditLoadedEvent(): Boolean {
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
         val canManageGroupEvent =
             groupId.isNotBlank() &&
-                (currentUserId == groupOwnerUserId || groupAdminIds.contains(currentUserId))
+                (
+                    currentUserId == groupOwnerUserId ||
+                        (
+                            groupAdminIds.contains(currentUserId) &&
+                                (
+                                    groupProfile?.adminPermissions?.canCreateEvents == true ||
+                                        currentUserId == createdByUserId
+                                )
+                        )
+                )
 
         return currentUserId.isNotBlank() &&
             (
@@ -265,8 +333,21 @@ fun EventProfileScreen(
             )
     }
 
+    fun canSetLoadedEventVisibility(): Boolean =
+        currentUserId.isNotBlank() &&
+            (
+                currentUserId == ownerUserId.ifBlank { eventOwnerUserId } ||
+                    currentUserId == createdByUserId ||
+                    currentUserId == groupOwnerUserId ||
+                    (
+                        groupId.isNotBlank() &&
+                            groupAdminIds.contains(currentUserId) &&
+                            groupProfile?.adminPermissions?.canSetEventVisibility == true
+                    )
+            )
+
     fun canInviteToLoadedEvent(): Boolean {
-        if (canManageLoadedEvent()) return true
+        if (canEditLoadedEvent()) return true
 
         return currentUserId.isNotBlank() &&
             inviteesCanInvite &&
@@ -312,12 +393,18 @@ fun EventProfileScreen(
         updatedEvent: PersonalEvent,
         removePeopleOutsideFriends: Boolean = false,
     ) {
-        if (!canManageLoadedEvent() || eventId.isBlank()) return
+        if (!canEditLoadedEvent() || eventId.isBlank()) return
 
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
+        val currentUserGroupMemberIds =
+            currentUserGroups
+                .flatMap { it.memberIds }
+                .distinct()
         val allowedUserIds =
             (
                 currentUserFriendIds.orEmpty() +
+                    currentUserGroupMemberIds +
+                    groupProfile?.memberIds.orEmpty() +
                     currentUserId +
                     eventDocumentOwnerUserId +
                     createdByUserId
@@ -356,6 +443,7 @@ fun EventProfileScreen(
                 "imageUrl" to updatedEvent.imageUrl,
                 "visibility" to updatedEvent.visibility,
                 "inviteesCanInvite" to updatedEvent.inviteesCanInvite,
+                "attendeeVisibility" to updatedEvent.attendeeVisibility,
             )
 
         if (removePeopleOutsideFriends) {
@@ -375,6 +463,7 @@ fun EventProfileScreen(
             imageUrl = updatedEvent.imageUrl
             visibility = updatedEvent.visibility
             inviteesCanInvite = updatedEvent.inviteesCanInvite
+            attendeeVisibility = updatedEvent.attendeeVisibility
             attendeeIds = updatedAttendeeIds
             invitedUserIds = updatedInvitedUserIds
             showEditEventScreen = false
@@ -419,7 +508,7 @@ fun EventProfileScreen(
     }
 
     fun updateEventVisibility(newVisibility: String) {
-        if (!canManageLoadedEvent() || eventId.isBlank()) return
+        if (!canSetLoadedEventVisibility() || eventId.isBlank()) return
         if (newVisibility == visibility) return
 
         eventRef
@@ -433,7 +522,7 @@ fun EventProfileScreen(
     }
 
     fun deleteEvent() {
-        if (!canManageLoadedEvent() || eventId.isBlank()) return
+        if (!canEditLoadedEvent() || eventId.isBlank()) return
 
         db
             .collection("eventInvites")
@@ -480,7 +569,7 @@ fun EventProfileScreen(
     }
 
     fun removeAttendee(attendeeId: String) {
-        if (!canManageLoadedEvent() || attendeeId.isBlank()) return
+        if (!canEditLoadedEvent() || attendeeId.isBlank()) return
 
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
 
@@ -519,7 +608,7 @@ fun EventProfileScreen(
     }
 
     fun blockUserFromEvent(blockedUserId: String) {
-        if (!canManageLoadedEvent() || blockedUserId.isBlank()) return
+        if (!canEditLoadedEvent() || blockedUserId.isBlank()) return
 
         val eventDocumentOwnerUserId = ownerUserId.ifBlank { eventOwnerUserId }
 
@@ -560,7 +649,7 @@ fun EventProfileScreen(
     }
 
     fun unblockUserFromEvent(blockedUserId: String) {
-        if (!canManageLoadedEvent() || blockedUserId.isBlank()) return
+        if (!canEditLoadedEvent() || blockedUserId.isBlank()) return
 
         eventRef
             .update("blockedUserIds", FieldValue.arrayRemove(blockedUserId))
@@ -574,29 +663,111 @@ fun EventProfileScreen(
     }
 
     if (showInviteDialog) {
+        val inviteSourceOptions =
+            buildList {
+                add("friends" to "Friends")
+                add("groups" to "My Groups")
+                if (groupId.isNotBlank()) {
+                    add("groupMembers" to "Group Members")
+                }
+            }
+        val selectedInviteGroup = currentUserGroups.firstOrNull { it.id == selectedInviteGroupId }
+        val inviteCandidates =
+            when (inviteSource) {
+                "groupMembers" -> groupMemberProfiles
+                "groups" -> selectedInviteGroupProfiles
+                else -> friendProfiles
+            }.filterNot { it.id == currentUserId }
+                .distinctBy { it.id }
+
         AlertDialog(
             onDismissRequest = { showInviteDialog = false },
-            title = { Text("Invite Friends") },
+            title = { Text("Invite People") },
             text = {
-                Column {
-                    friendProfiles.forEach { friend ->
-                        val alreadyInvited = invitedUserIds.contains(friend.id)
-                        val isAttending = attendeeIds.contains(friend.id)
-                        val isBlockedFromEvent = blockedUserIds.contains(friend.id)
-
-                        OutlinedButton(
-                            onClick = { inviteUser(friend) },
-                            enabled = !alreadyInvited && !isAttending && !isBlockedFromEvent,
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        RippleOutlinedButton(
+                            text = "Source: ${inviteSourceOptions.firstOrNull { it.first == inviteSource }?.second ?: "Friends"}",
+                            onClick = { inviteSourceMenuExpanded = true },
                             modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        DropdownMenu(
+                            expanded = inviteSourceMenuExpanded,
+                            onDismissRequest = { inviteSourceMenuExpanded = false },
                         ) {
-                            Text(
-                                when {
-                                    isBlockedFromEvent -> "${friend.name} blocked"
-                                    isAttending -> "${friend.name} attending"
-                                    alreadyInvited -> "${friend.name} invited"
-                                    else -> friend.name
-                                },
+                            inviteSourceOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.second) },
+                                    onClick = {
+                                        inviteSource = option.first
+                                        inviteSourceMenuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    if (inviteSource == "groups") {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            RippleOutlinedButton(
+                                text = selectedInviteGroup?.name ?: "Choose Group",
+                                onClick = { inviteGroupMenuExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = currentUserGroups.isNotEmpty(),
                             )
+
+                            DropdownMenu(
+                                expanded = inviteGroupMenuExpanded,
+                                onDismissRequest = { inviteGroupMenuExpanded = false },
+                            ) {
+                                currentUserGroups.forEach { group ->
+                                    DropdownMenuItem(
+                                        text = { Text(group.name.ifBlank { "Unnamed Group" }) },
+                                        onClick = {
+                                            selectedInviteGroupId = group.id
+                                            inviteGroupMenuExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (inviteSource == "groups" && currentUserGroups.isEmpty()) {
+                        Text("You are not in any groups yet.")
+                    } else if (inviteSource == "groups" && selectedInviteGroup == null) {
+                        Text("Choose a group to browse its members.")
+                    } else if (inviteCandidates.isEmpty()) {
+                        Text("No people available to invite from this source.")
+                    } else {
+                        inviteCandidates.forEach { person ->
+                            val alreadyInvited = invitedUserIds.contains(person.id)
+                            val isAttending = attendeeIds.contains(person.id)
+                            val isBlockedFromEvent = blockedUserIds.contains(person.id)
+
+                            RippleOutlinedButton(
+                                text = when {
+                                    isBlockedFromEvent -> "${person.name} blocked"
+                                    isAttending -> "${person.name} attending"
+                                    alreadyInvited -> "${person.name} invited"
+                                    else -> person.name
+                                },
+                                onClick = { inviteUser(person) },
+                                enabled = !alreadyInvited && !isAttending && !isBlockedFromEvent,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
@@ -615,23 +786,18 @@ fun EventProfileScreen(
             title = { Text("Delete Event") },
             text = { Text("Are you sure you want to delete ${title.ifBlank { "this event" }}?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Delete",
                     onClick = {
                         showDeleteDialog = false
                         deleteEvent()
                     },
-                    colors =
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Text("Delete")
-                }
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showDeleteDialog = false })
             },
         )
     }
@@ -642,19 +808,16 @@ fun EventProfileScreen(
             title = { Text("Leave Event") },
             text = { Text("Are you sure you want to leave ${title.ifBlank { "this event" }}?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Leave",
                     onClick = {
                         showLeaveDialog = false
                         leaveEvent()
                     },
-                ) {
-                    Text("Leave")
-                }
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showLeaveDialog = false }) {
-                    Text("Cancel")
-                }
+                RippleOutlinedButton(text = "Cancel", onClick = { showLeaveDialog = false })
             },
         )
     }
@@ -670,7 +833,8 @@ fun EventProfileScreen(
             title = { Text("Disable Open Invites") },
             text = { Text("Remove attendees and pending invitees who are not in your friends list?") },
             confirmButton = {
-                Button(
+                RippleButton(
+                    text = "Remove Non-Friends",
                     onClick = {
                         if (pendingUpdate != null) {
                             updateEvent(pendingUpdate, removePeopleOutsideFriends = true)
@@ -678,12 +842,11 @@ fun EventProfileScreen(
                         showDisableOpenInvitesDialog = false
                         pendingInviteSettingUpdate = null
                     },
-                ) {
-                    Text("Remove Non-Friends")
-                }
+                )
             },
             dismissButton = {
-                OutlinedButton(
+                RippleOutlinedButton(
+                    text = "Keep Everyone",
                     onClick = {
                         if (pendingUpdate != null) {
                             updateEvent(pendingUpdate, removePeopleOutsideFriends = false)
@@ -691,9 +854,7 @@ fun EventProfileScreen(
                         showDisableOpenInvitesDialog = false
                         pendingInviteSettingUpdate = null
                     },
-                ) {
-                    Text("Keep Everyone")
-                }
+                )
             },
         )
     }
@@ -721,16 +882,18 @@ fun EventProfileScreen(
             attendeeIds = attendeeIds,
             invitedUserIds = invitedUserIds,
             inviteesCanInvite = inviteesCanInvite,
+            attendeeVisibility = attendeeVisibility,
             blockedUserIds = blockedUserIds,
             imageUrl = imageUrl,
         )
 
-    if (!canViewEvent(currentEvent, currentUserId, currentUserFriendIds.orEmpty())) {
+    if (!canViewEvent(currentEvent, currentUserId, currentUserFriendIds.orEmpty(), groupProfile)) {
         Text("This event is private.")
         return
     }
 
-    val canManageEvent = canManageLoadedEvent()
+    val canManageEvent = canEditLoadedEvent()
+    val canSetVisibility = canSetLoadedEventVisibility()
     val canInviteToEvent = canInviteToLoadedEvent()
 
     if (showEditEventScreen && canManageEvent) {
@@ -787,20 +950,38 @@ fun EventProfileScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text("${attendeeIds.size} attending")
+        val visibleAttendeeIds =
+            attendeeIds.filter { attendeeId ->
+                val attendee = attendeeProfiles.firstOrNull { it.id == attendeeId }
+                attendee != null && canViewProfile(attendee, currentUserId, currentUserFriendIds.orEmpty())
+            }
 
-        if (attendeeIds.isEmpty()) {
-            Text("No attendees yet.", color = MaterialTheme.colorScheme.secondary)
-        } else {
-            TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
-                Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
+        when (attendeeVisibility) {
+            EVENT_ATTENDEE_VISIBILITY_NONE -> {
+                Text("Attendees are hidden for this event.", color = MaterialTheme.colorScheme.secondary)
+            }
+
+            EVENT_ATTENDEE_VISIBILITY_COUNT -> {
+                Text("${attendeeIds.size} attending")
+            }
+
+            else -> {
+                Text("${attendeeIds.size} attending")
+
+                if (attendeeIds.isEmpty()) {
+                    Text("No attendees yet.", color = MaterialTheme.colorScheme.secondary)
+                } else {
+                    TextButton(onClick = { attendeesExpanded = !attendeesExpanded }) {
+                        Text(if (attendeesExpanded) "Hide attendees" else "Show attendees")
+                    }
+                }
             }
         }
 
-        if (attendeesExpanded && attendeeIds.isNotEmpty()) {
+        if (attendeeVisibility == EVENT_ATTENDEE_VISIBILITY_FULL && attendeesExpanded && attendeeIds.isNotEmpty()) {
             val attendeeById = attendeeProfiles.associateBy { it.id }
 
-            attendeeIds.forEach { attendeeId ->
+            visibleAttendeeIds.forEach { attendeeId ->
                 val attendee = attendeeById[attendeeId]
                 val attendeeName =
                     attendee
@@ -819,12 +1000,11 @@ fun EventProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    OutlinedButton(
+                    RippleOutlinedButton(
+                        text = attendeeName,
                         onClick = { onOpenUserProfile(attendeeId) },
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Text(attendeeName)
-                    }
+                    )
 
                     if (canManageAttendee) {
                         Spacer(modifier = Modifier.width(8.dp))
@@ -848,6 +1028,13 @@ fun EventProfileScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
             }
+
+            if (visibleAttendeeIds.isEmpty()) {
+                Text(
+                    "Only the attendee count is visible because attendee profiles are private.",
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -859,9 +1046,11 @@ fun EventProfileScreen(
                 !currentEvent.isPastEvent()
 
         if (canLeaveEvent) {
-            OutlinedButton(onClick = { showLeaveDialog = true }) {
-                Text("Leave Event")
-            }
+            RippleOutlinedButton(
+                text = "Leave Event",
+                onClick = { showLeaveDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -874,34 +1063,40 @@ fun EventProfileScreen(
         if (canInviteToEvent && !currentEvent.isPastEvent()) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(onClick = { showInviteDialog = true }) {
-                Text("Invite Friends")
-            }
+            RippleButton(
+                text = "Invite People",
+                onClick = { showInviteDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
-        if (canManageEvent) {
+        if (canManageEvent || canSetVisibility) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text("Manage Event", style = MaterialTheme.typography.titleMedium)
 
-            Button(onClick = { showEditEventScreen = true }) {
-                Text("Edit Event")
+            if (canManageEvent) {
+                RippleButton(
+                    text = "Edit Event",
+                    onClick = { showEditEventScreen = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            if (canSetVisibility) {
+                VisibilitySelector(
+                    title = "Event Visibility",
+                    selectedValue = visibility,
+                    options = if (groupId.isNotBlank()) GroupEventVisibilityOptions else EventVisibilityOptions,
+                    onValueChange = { updateEventVisibility(it) },
+                )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-            VisibilitySelector(
-                title = "Event Visibility",
-                selectedValue = visibility,
-                options = EventVisibilityOptions,
-                onValueChange = { updateEventVisibility(it) },
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (blockedUserIds.isNotEmpty()) {
+            if (canManageEvent && blockedUserIds.isNotEmpty()) {
                 Text("Blocked from Event", style = MaterialTheme.typography.titleSmall)
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -920,12 +1115,11 @@ fun EventProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlinedButton(
+                        RippleOutlinedButton(
+                            text = blockedName,
                             onClick = { onOpenUserProfile(blockedUserId) },
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Text(blockedName)
-                        }
+                        )
 
                         Spacer(modifier = Modifier.width(8.dp))
 
@@ -944,14 +1138,16 @@ fun EventProfileScreen(
                 }
             }
 
-            Button(
-                onClick = { showDeleteDialog = true },
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-            ) {
-                Text("Delete Event")
+            if (canManageEvent) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                RippleButton(
+                    text = "Delete Event",
+                    onClick = { showDeleteDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
             }
         }
 
@@ -977,5 +1173,39 @@ fun EventProfileScreen(
                 onClick = { onOpenClubProfile(clubId) },
             )
         }
+    }
+}
+
+private fun fetchEventUsersByIds(
+    db: FirebaseFirestore,
+    ids: List<String>,
+    onResult: (List<UserProfile>) -> Unit,
+) {
+    if (ids.isEmpty()) {
+        onResult(emptyList())
+        return
+    }
+
+    val chunks = ids.distinct().chunked(10)
+    val collected = mutableListOf<UserProfile>()
+    var remaining = chunks.size
+
+    chunks.forEach { chunk ->
+        db.collection("users")
+            .whereIn(FieldPath.documentId(), chunk)
+            .get()
+            .addOnSuccessListener { result ->
+                collected += result.documents.map { it.toUserProfile() }
+                remaining--
+                if (remaining == 0) {
+                    onResult(collected.distinctBy { it.id }.sortedBy { ids.indexOf(it.id) })
+                }
+            }
+            .addOnFailureListener {
+                remaining--
+                if (remaining == 0) {
+                    onResult(collected.distinctBy { it.id }.sortedBy { ids.indexOf(it.id) })
+                }
+            }
     }
 }

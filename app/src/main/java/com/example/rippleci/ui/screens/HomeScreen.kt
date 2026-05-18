@@ -27,6 +27,7 @@ import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.data.toSchoolEvent
 import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.events.EventsUiState
 import com.example.rippleci.ui.events.EventsViewModel
 import com.google.firebase.Firebase
@@ -46,6 +47,7 @@ fun HomeScreen(
     val userId = auth.currentUser?.uid
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
+    var pendingInvitesCount by remember { mutableStateOf(0) }
     var markedSchoolEvents by remember { mutableStateOf<Map<String, SchoolEvent>>(emptyMap()) }
     val uiState by eventsViewModel.uiState.collectAsState()
     val nowMillis = System.currentTimeMillis()
@@ -98,6 +100,14 @@ fun HomeScreen(
 
     LaunchedEffect(userId) {
         val uid = userId ?: return@LaunchedEffect
+
+        db
+            .collection("eventInvites")
+            .whereEqualTo("toUserId", uid)
+            .whereEqualTo("status", "pending")
+            .addSnapshotListener { snapshot, _ ->
+                pendingInvitesCount = snapshot?.documents?.size ?: 0
+            }
 
         db
             .collection("eventInvites")
@@ -182,119 +192,166 @@ fun HomeScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
     ) {
+        // --- 1. TODAY'S EVENTS SECTION ---
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            FlowRow(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .clickable { myEventsExpanded = !myEventsExpanded }
-                        .padding(vertical = 4.dp),
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { myEventsExpanded = !myEventsExpanded }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Today's Events - $todayWeekdayLabel, ",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = todayDateLabel,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    softWrap = false,
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Today's Events - $todayWeekdayLabel",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = todayDateLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    )
+                }
+                Icon(
+                    imageVector = if (myEventsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (myEventsExpanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            OutlinedButton(onClick = onAddEvent) {
-                Text("My Events")
+            RippleOutlinedButton(
+                onClick = onAddEvent,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("My Events")
+                    if (pendingInvitesCount > 0) {
+                        Text(
+                            "Invites (${pendingInvitesCount})",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
             }
         }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         if (myEventsExpanded) {
-            if (todaysPersonalEvents.isEmpty()) {
-                Text("No personal events today.", style = MaterialTheme.typography.bodyMedium)
-            } else {
-                todaysPersonalEvents.forEach { event ->
-                    PersonalEventCard(
-                        event = event,
-                        onClick = {
-                            onOpenEventProfile(
-                                event.ownerUserId.ifBlank { userId.orEmpty() },
-                                event.id,
-                                event.groupId,
-                            )
-                        },
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (todaysPersonalEvents.isEmpty()) {
+                    Text(
+                        text = "No personal events today.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.secondary
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                } else {
+                    todaysPersonalEvents.forEach { event ->
+                        PersonalEventCard(
+                            event = event,
+                            onClick = {
+                                onOpenEventProfile(
+                                    event.ownerUserId.ifBlank { userId.orEmpty() },
+                                    event.id,
+                                    event.groupId,
+                                )
+                            },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // --- 2. TODAY'S SCHOOL EVENTS SECTION ---
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { schoolEventsExpanded = !schoolEventsExpanded }
-                    .padding(vertical = 4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { schoolEventsExpanded = !schoolEventsExpanded }
+                .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = "Today's School Events",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f)
             )
             Icon(
                 imageVector = if (schoolEventsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = if (schoolEventsExpanded) "Collapse" else "Expand",
                 tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         if (schoolEventsExpanded) {
-            when (val state = uiState) {
-                is EventsUiState.Loading -> {
-                    CircularProgressIndicator()
-                }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                when (val state = uiState) {
+                    is EventsUiState.Loading -> {
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
 
-                is EventsUiState.Error -> {
-                    Text("Could not load school events.")
-                }
+                    is EventsUiState.Error -> {
+                        Text(
+                            text = "Could not load school events.",
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
 
-                is EventsUiState.Success -> {
-                    val todaysEvents =
-                        state.events
-                            .filter { event -> event.isOnDay(nowMillis) }
-                            .sortedWith(
-                                compareByDescending<SchoolEvent> {
-                                    markedSchoolEvents.containsKey(it.stableSchoolEventId())
-                                }.thenBy { it.schoolEventSortMillis() },
+                    is EventsUiState.Success -> {
+                        val todaysEvents =
+                            state.events
+                                .filter { event -> event.isOnDay(nowMillis) }
+                                .sortedWith(
+                                    compareByDescending<SchoolEvent> {
+                                        markedSchoolEvents.containsKey(it.stableSchoolEventId())
+                                    }.thenBy { it.schoolEventSortMillis() },
+                                )
+
+                        if (todaysEvents.isEmpty()) {
+                            Text(
+                                text = "No school events scheduled for today.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                color = MaterialTheme.colorScheme.secondary
                             )
+                        } else {
+                            todaysEvents.forEach { event ->
+                                val eventKey = event.stableSchoolEventId()
 
-                    if (todaysEvents.isEmpty()) {
-                        Text("No school events scheduled for today.", style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        todaysEvents.forEach { event ->
-                            val eventKey = event.stableSchoolEventId()
-
-                            EventCard(
-                                event = event,
-                                isMarkedAttending = markedSchoolEvents.containsKey(eventKey),
-                                onToggleAttendance = { toggleSchoolEventAttendance(event) },
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
+                                EventCard(
+                                    event = event,
+                                    isMarkedAttending = markedSchoolEvents.containsKey(eventKey),
+                                    onToggleAttendance = { toggleSchoolEventAttendance(event) },
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                         }
                     }
                 }

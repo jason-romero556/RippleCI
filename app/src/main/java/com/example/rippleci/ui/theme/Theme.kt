@@ -2,7 +2,9 @@ package com.example.rippleci.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -17,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 
 enum class AppTheme(
     val label: String,
@@ -158,6 +161,15 @@ private val LightColorScheme =
         tertiary = Pink40,
     )
 
+private val RippleShapes =
+    Shapes(
+        extraSmall = RoundedCornerShape(9.dp),
+        small = RoundedCornerShape(9.dp),
+        medium = RoundedCornerShape(9.dp),
+        large = RoundedCornerShape(12.dp),
+        extraLarge = RoundedCornerShape(16.dp),
+    )
+
 @Composable
 fun RippleCITheme(
     appTheme: AppTheme = AppTheme.NEW_SCHOOL,
@@ -214,6 +226,7 @@ fun RippleCITheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = typography,
+        shapes = RippleShapes,
         content = content,
     )
 }

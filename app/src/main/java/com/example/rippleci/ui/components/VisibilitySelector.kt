@@ -26,6 +26,13 @@ val ProfileVisibilityOptions =
         VisibilityOption("private", "Private", "Only you can view this."),
     )
 
+val ProfileSectionVisibilityOptions =
+    listOf(
+        VisibilityOption("public", "Public", "Anyone who can open your profile can view this section."),
+        VisibilityOption("friends", "Friends", "Only friends can view this section."),
+        VisibilityOption("private", "Private", "Only you can view this section."),
+    )
+
 val EventVisibilityOptions =
     listOf(
         VisibilityOption("public", "Public", "Anyone can view this event."),
@@ -34,12 +41,43 @@ val EventVisibilityOptions =
         VisibilityOption("private", "Private", "Only you can view this event."),
     )
 
+val GroupEventVisibilityOptions =
+    listOf(
+        VisibilityOption("public", "Public", "Anyone can view this event."),
+        VisibilityOption("friends", "Friends", "Only friends can view this event."),
+        VisibilityOption("members", "Members", "Only group members can view this event."),
+        VisibilityOption("attendees", "Attendees", "Only invited or attending people can view this event."),
+        VisibilityOption("private", "Private", "Only group leadership can view this event."),
+    )
+
+val EventAttendeeVisibilityOptions =
+    listOf(
+        VisibilityOption("full", "Show Attendees", "Display the attendee count and the attendee list."),
+        VisibilityOption("count", "Count Only", "Display only the number of attendees."),
+        VisibilityOption("none", "Hide Attendees", "Hide both the attendee count and attendee list."),
+    )
+
 val GroupVisibilityOptions =
     listOf(
         VisibilityOption("public", "Public", "Anyone can find this group."),
         VisibilityOption("friends", "Friends", "Only friends can find this group."),
         VisibilityOption("members", "Members", "Only members can view this group."),
-        VisibilityOption("private", "Private", "Only admins can view this group."),
+    )
+
+val PastGroupEventsVisibilityOptions =
+    listOf(
+        VisibilityOption("public", "Public", "Anyone who can open the group can view past events."),
+        VisibilityOption("members", "Members", "Only current members can view past events."),
+        VisibilityOption("admins", "Admins", "Only the owner and admins can view past events."),
+        VisibilityOption("owner", "Owner Only", "Only the owner can view past events."),
+    )
+
+val BulletinBoardVisibilityOptions =
+    listOf(
+        VisibilityOption("public", "Public", "Anyone who can open the group can view the bulletin board."),
+        VisibilityOption("members", "Members", "Only current group members can view the bulletin board."),
+        VisibilityOption("moderators", "Moderators", "Only the owner and bulletin moderators can view the bulletin board."),
+        VisibilityOption("owner", "Owner Only", "Only the owner can view the bulletin board."),
     )
 
 @Composable

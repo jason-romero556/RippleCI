@@ -1,7 +1,7 @@
 package com.example.rippleci.ui.screens
 
-import android.os.Build
 import android.net.Uri
+import android.os.Build
 import android.widget.NumberPicker
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,8 +44,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.ui.components.EventAttendeeVisibilityOptions
 import com.example.rippleci.ui.components.EventVisibilityOptions
 import com.example.rippleci.ui.components.ImageUploadControls
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
+import com.example.rippleci.ui.components.VisibilityOption
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.components.createImageCaptureUri
 import com.google.firebase.Firebase
@@ -62,6 +66,11 @@ import java.util.UUID
 fun CreatePersonalEventScreen(
     initialEvent: PersonalEvent? = null,
     saveButtonText: String = if (initialEvent == null) "Save Event" else "Save Changes",
+    visibilityTitle: String = "Event Visibility",
+    visibilityOptions: List<VisibilityOption> = EventVisibilityOptions,
+    defaultVisibility: String = visibilityOptions.firstOrNull()?.value ?: "public",
+    canEditVisibility: Boolean = true,
+    attendeeVisibilityTitle: String = "Attendee Visibility",
     onSave: (PersonalEvent) -> Unit = {},
     onCancel: () -> Unit = {},
 ) {
@@ -90,9 +99,12 @@ fun CreatePersonalEventScreen(
     var showDateDialog by remember { mutableStateOf(false) }
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
-    var visibility by remember(initialEvent?.id) { mutableStateOf(initialEvent?.visibility ?: "public") }
+    var visibility by remember(initialEvent?.id) { mutableStateOf(initialEvent?.visibility ?: defaultVisibility) }
     var inviteesCanInvite by remember(initialEvent?.id) {
         mutableStateOf(initialEvent?.inviteesCanInvite ?: false)
+    }
+    var attendeeVisibility by remember(initialEvent?.id) {
+        mutableStateOf(initialEvent?.attendeeVisibility ?: "full")
     }
     var statusMessage by remember { mutableStateOf("") }
 
@@ -296,39 +308,48 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = dateLabel,
             onClick = { showDateDialog = true },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(dateLabel)
-        }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = startTimeLabel,
             onClick = { showStartTimeDialog = true },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(startTimeLabel)
-        }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        OutlinedButton(
+        RippleOutlinedButton(
+            text = endTimeLabel,
             onClick = { showEndTimeDialog = true },
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(endTimeLabel)
-        }
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        VisibilitySelector(
-            title = "Event Visibility",
-            selectedValue = visibility,
-            options = EventVisibilityOptions,
-            onValueChange = { visibility = it },
-        )
+        if (canEditVisibility) {
+            VisibilitySelector(
+                title = visibilityTitle,
+                selectedValue = visibility,
+                options = visibilityOptions,
+                onValueChange = { visibility = it },
+            )
+        } else {
+            Text(
+                text = "$visibilityTitle: ${visibilityOptions.firstOrNull { it.value == visibility }?.label ?: visibility}",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "This event will use the group's default visibility.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -348,6 +369,15 @@ fun CreatePersonalEventScreen(
             )
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        VisibilitySelector(
+            title = attendeeVisibilityTitle,
+            selectedValue = attendeeVisibility,
+            options = EventAttendeeVisibilityOptions,
+            onValueChange = { attendeeVisibility = it },
+        )
+
         if (statusMessage.isNotBlank()) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(statusMessage, color = MaterialTheme.colorScheme.error)
@@ -355,11 +385,12 @@ fun CreatePersonalEventScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(
+        RippleButton(
+            text = saveButtonText,
             onClick = {
                 if (isUploadingImage) {
                     statusMessage = "Wait for the image upload to finish."
-                    return@Button
+                    return@RippleButton
                 }
 
                 val startMillis = startAtMillis
@@ -398,6 +429,7 @@ fun CreatePersonalEventScreen(
                                 attendeeIds = initialEvent?.attendeeIds.orEmpty(),
                                 invitedUserIds = initialEvent?.invitedUserIds.orEmpty(),
                                 inviteesCanInvite = inviteesCanInvite,
+                                attendeeVisibility = attendeeVisibility,
                                 blockedUserIds = initialEvent?.blockedUserIds.orEmpty(),
                                 imageUrl = imageUrl.trim(),
                             ),
@@ -407,16 +439,15 @@ fun CreatePersonalEventScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = canAttemptSave && !isUploadingImage,
-        ) {
-            Text(saveButtonText)
-        }
+        )
 
-        OutlinedButton(
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RippleOutlinedButton(
+            text = "Cancel",
             onClick = onCancel,
             modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Cancel")
-        }
+        )
     }
 }
 

@@ -3,6 +3,7 @@ package com.example.rippleci.ui.screens
 import android.Manifest
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Remove
@@ -65,6 +68,7 @@ import com.example.rippleci.data.OpenStreetMapTileProvider
 import com.example.rippleci.data.campusLocations
 import com.example.rippleci.data.routeDistanceMeters
 import com.example.rippleci.data.walkingRoute
+import com.example.rippleci.ui.components.RippleButton
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -343,9 +347,10 @@ fun MapScreen() {
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)
                         )
-                        Button(onClick = { locationPermissionState.launchPermissionRequest() }) {
-                            Text("Enable")
-                        }
+                        RippleButton(
+                            text = "Enable",
+                            onClick = { locationPermissionState.launchPermissionRequest() }
+                        )
                     }
                 }
             }
@@ -533,24 +538,28 @@ private fun MapZoomControls(
 private fun FloatingPanel(
     title: String,
     collapsed: Boolean,
-    actionLabel: String? = null,
     onToggleCollapsed: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleCollapsed() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                TextButton(
-                    onClick = onToggleCollapsed,
-                    modifier = Modifier.align(Alignment.CenterEnd),
-                ) {
-                    Text(actionLabel ?: if (collapsed) "Open" else "Collapse")
-                }
+                Icon(
+                    imageVector = if (collapsed) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                    contentDescription = if (collapsed) "Expand" else "Collapse",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             }
             if (!collapsed) {
                 HorizontalDivider()

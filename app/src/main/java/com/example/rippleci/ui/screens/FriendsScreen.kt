@@ -32,6 +32,8 @@ import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.GroupVisibilityOptions
 import com.example.rippleci.ui.components.ImageUploadControls
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.StudentCard
 import com.example.rippleci.ui.components.VisibilitySelector
 import com.example.rippleci.ui.components.createImageCaptureUri
@@ -91,7 +93,6 @@ fun FriendsScreen(
     var pendingGroupCameraUri by remember { mutableStateOf<Uri?>(null) }
     var groupVisibility by remember { mutableStateOf("public") }
     var groupMembersCanInvite by remember { mutableStateOf(false) }
-    var groupAdminsCanManageInvites by remember { mutableStateOf(false) }
     var blockedUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var blockedByUserIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val hiddenUserIds = blockedUserIds + blockedByUserIds
@@ -340,7 +341,7 @@ fun FriendsScreen(
                     "adminIds" to listOf(uid),
                     "visibility" to groupVisibility,
                     "membersCanInvite" to groupMembersCanInvite,
-                    "adminsCanManageInvites" to groupAdminsCanManageInvites,
+                    "adminsCanManageInvites" to false,
                     "createdAt" to System.currentTimeMillis(),
                 ),
             ).addOnSuccessListener {
@@ -349,7 +350,6 @@ fun FriendsScreen(
                 groupProfilePictureUrl = ""
                 groupVisibility = "public"
                 groupMembersCanInvite = false
-                groupAdminsCanManageInvites = false
                 showCreateGroupDialog = false
             }
     }
@@ -576,31 +576,17 @@ fun FriendsScreen(
                             onCheckedChange = { groupMembersCanInvite = it },
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Admins can manage invites",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Switch(
-                            checked = groupAdminsCanManageInvites,
-                            onCheckedChange = { groupAdminsCanManageInvites = it },
-                        )
-                    }
                 }
             },
             confirmButton = {
-                Button(onClick = { createGroup() }, enabled = groupName.isNotBlank() && !isUploadingGroupImage) {
-                    Text("Create")
-                }
+                RippleButton(
+                    text = "Create",
+                    onClick = { createGroup() },
+                    enabled = groupName.isNotBlank() && !isUploadingGroupImage
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = { showCreateGroupDialog = false }) { Text("Cancel") }
+                RippleOutlinedButton(text = "Cancel", onClick = { showCreateGroupDialog = false })
             },
         )
     }
@@ -701,12 +687,19 @@ fun FriendsScreen(
                     } else {
                         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                             incomingRequests.forEach { request ->
-                                val senderFirstName =
+                                val senderDisplayName =
                                     incomingRequestSenderNames[request.fromUserId]
-                                        ?: firstNameFromCandidates(request.fromUserName)
+                                        ?: request.fromUserName.ifBlank { request.fromUserId }
+                                val senderFirstName =
+                                    firstNameFromCandidates(senderDisplayName)
+                                        .ifBlank { senderDisplayName.ifBlank { "Unknown user" } }
 
                                 Card(
+                                    onClick = {
+                                        onOpenUserProfile(request.fromUserId, senderDisplayName)
+                                    },
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    enabled = request.fromUserId.isNotBlank(),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                                 ) {
                                     Row(
@@ -728,33 +721,39 @@ fun FriendsScreen(
                                                 color = MaterialTheme.colorScheme.secondary,
                                             )
                                         }
-                                        Button(onClick = {
-                                            val uid = currentUserId
-                                            val batch = db.batch()
-                                            batch.update(
-                                                db.collection("friendRequests").document(request.id),
-                                                "status",
-                                                "accepted",
-                                            )
-                                            batch.update(
-                                                db.collection("users").document(uid),
-                                                "friends",
-                                                FieldValue.arrayUnion(request.fromUserId),
-                                            )
-                                            batch.update(
-                                                db.collection("users").document(request.fromUserId),
-                                                "friends",
-                                                FieldValue.arrayUnion(uid),
-                                            )
-                                            batch.commit()
-                                        }) { Text("Accept") }
+                                        RippleButton(
+                                            text = "Accept",
+                                            onClick = {
+                                                val uid = currentUserId
+                                                val batch = db.batch()
+                                                batch.update(
+                                                    db.collection("friendRequests").document(request.id),
+                                                    "status",
+                                                    "accepted",
+                                                )
+                                                batch.update(
+                                                    db.collection("users").document(uid),
+                                                    "friends",
+                                                    FieldValue.arrayUnion(request.fromUserId),
+                                                )
+                                                batch.update(
+                                                    db.collection("users").document(request.fromUserId),
+                                                    "friends",
+                                                    FieldValue.arrayUnion(uid),
+                                                )
+                                                batch.commit()
+                                            }
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        OutlinedButton(onClick = {
-                                            db
-                                                .collection("friendRequests")
-                                                .document(request.id)
-                                                .update("status", "denied")
-                                        }) { Text("Deny") }
+                                        RippleOutlinedButton(
+                                            text = "Deny",
+                                            onClick = {
+                                                db
+                                                    .collection("friendRequests")
+                                                    .document(request.id)
+                                                    .update("status", "denied")
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -776,19 +775,39 @@ fun FriendsScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary,
                                     )
-                                    Row {
-                                        Button(onClick = { acceptGroupInvite(invite) }) { Text("Accept") }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        OutlinedButton(onClick = { declineGroupInvite(invite) }) { Text("Decline") }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        RippleButton(
+                                            text = "Accept",
+                                            onClick = { acceptGroupInvite(invite) },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        RippleOutlinedButton(
+                                            text = "Decline",
+                                            onClick = { declineGroupInvite(invite) },
+                                            modifier = Modifier.weight(1f),
+                                        )
                                     }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    RippleOutlinedButton(
+                                        text = "View Group",
+                                        onClick = { onOpenUserGroupProfile(invite.groupId) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = invite.groupId.isNotBlank(),
+                                    )
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        Button(onClick = { showCreateGroupDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Create Group")
-                        }
+                        RippleButton(
+                            text = "Create Group",
+                            onClick = { showCreateGroupDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
 
                         if (userGroups.isEmpty()) {
@@ -807,10 +826,11 @@ fun FriendsScreen(
                                         )
                                         Text("${group.memberIds.size} members")
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        OutlinedButton(
+                                        RippleOutlinedButton(
+                                            text = "Open Group",
                                             onClick = { onOpenUserGroupProfile(group.id) },
                                             modifier = Modifier.fillMaxWidth(),
-                                        ) { Text("Open Group") }
+                                        )
                                     }
                                 }
                             }
@@ -961,9 +981,11 @@ fun FriendsScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        Button(onClick = { runStudentSearch() }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Search")
-                        }
+                        RippleButton(
+                            text = "Search",
+                            onClick = { runStudentSearch() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
                         Spacer(modifier = Modifier.height(16.dp))
 

@@ -26,23 +26,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.rippleci.data.canViewEvent
 import com.example.rippleci.data.canViewProfile
+import com.example.rippleci.data.canViewProfileSection
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.firstNameFromCandidates
 import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.MESSAGE_PRIVACY_EVERYONE
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.data.models.UserGroupProfile
 import com.example.rippleci.data.models.UserProfile
 import com.example.rippleci.data.toPersonalEvent
+import com.example.rippleci.data.toUserGroupProfile
 import com.example.rippleci.data.toUserProfile
 import com.example.rippleci.ui.components.ClubLinkRow
 import com.example.rippleci.ui.components.FriendListCard
 import com.example.rippleci.ui.components.FriendshipStatusMenuButton
 import com.example.rippleci.ui.components.PersonalEventCard
 import com.example.rippleci.ui.components.ProfileHeader
+import com.example.rippleci.ui.components.RippleButton
 import com.example.rippleci.ui.components.UserPresenceIndicator
 import com.example.rippleci.ui.messages.MessagesViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.firestore
 
@@ -54,6 +59,7 @@ fun UserProfileScreen(
     onOpenConversation: (String, String) -> Unit,
     onOpenUserProfile: (String, String) -> Unit,
     onOpenClubProfile: (String) -> Unit,
+    onOpenUserGroupProfile: (String) -> Unit,
     onOpenEventProfile: (String, String, String) -> Unit,
     messagesViewModel: MessagesViewModel,
 ) {
@@ -63,6 +69,7 @@ fun UserProfileScreen(
 
     var userProfile by remember { mutableStateOf(UserProfile()) }
     var friendProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var userGroups by remember { mutableStateOf<List<UserGroupProfile>>(emptyList()) }
     var personalEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var attendingEvents by remember { mutableStateOf<List<PersonalEvent>>(emptyList()) }
     var isFriend by remember { mutableStateOf(false) }
@@ -73,6 +80,7 @@ fun UserProfileScreen(
     var currentUserName by remember { mutableStateOf("") }
     var isFriendListExpanded by remember { mutableStateOf(true) }
     var isClubListExpanded by remember { mutableStateOf(true) }
+    var isGroupListExpanded by remember { mutableStateOf(true) }
     var isEventListExpanded by remember { mutableStateOf(true) }
     var showPastEvents by remember { mutableStateOf(false) }
     var hasBlockedUser by remember { mutableStateOf(false) }
@@ -104,13 +112,19 @@ fun UserProfileScreen(
                 )
 
                 if (userProfile.friendIds.isNotEmpty()) {
-                    db
-                        .collection("users")
-                        .whereIn("__name__", userProfile.friendIds)
-                        .get()
-                        .addOnSuccessListener { result ->
-                            friendProfiles = result.documents.map { it.toUserProfile() }
-                        }
+                    friendProfiles = emptyList()
+
+                    userProfile.friendIds.distinct().chunked(10).forEach { chunk ->
+                        db.collection("users")
+                            .whereIn(FieldPath.documentId(), chunk)
+                            .get()
+                            .addOnSuccessListener { result ->
+                                friendProfiles =
+                                    (friendProfiles + result.documents.map { it.toUserProfile() })
+                                        .distinctBy { it.id }
+                                        .sortedBy { userProfile.friendIds.indexOf(it.id) }
+                            }
+                    }
                 }
 
                 db
@@ -121,6 +135,14 @@ fun UserProfileScreen(
                     .addOnSuccessListener { result ->
                         personalEvents =
                             result.documents.map { it.toPersonalEvent().copy(ownerUserId = userId) }
+                    }
+
+                db
+                    .collection("userGroups")
+                    .whereArrayContains("memberIds", userId)
+                    .get()
+                    .addOnSuccessListener { result ->
+                        userGroups = result.documents.map { it.toUserGroupProfile() }
                     }
 
                 db
@@ -437,12 +459,49 @@ fun UserProfileScreen(
         friendProfiles.filter { friend ->
             friend.id !in hiddenUserIds
         }
+    val canViewFriendsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.friendsVisibility,
+            profileOwnerId = userId,
+            currentUserId = currentUserId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+        )
+    val canViewEventsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.eventsVisibility,
+            profileOwnerId = userId,
+            currentUserId = currentUserId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+        )
+    val canViewGroupsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.groupsVisibility,
+            profileOwnerId = userId,
+            currentUserId = currentUserId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+        )
+    val canViewClubsSection =
+        canViewProfileSection(
+            sectionVisibility = userProfile.clubsVisibility,
+            profileOwnerId = userId,
+            currentUserFriendIds = currentUserFriendIds.orEmpty(),
+            currentUserId = currentUserId,
+        )
     val displayName = userProfile.name.ifBlank { userProfile.email.ifBlank { "Unknown User" } }
     val canMessageUser =
         currentUserId != userId &&
             !hasBlockedUser &&
             !isBlockedByUser &&
             (isFriend || userProfile.messagePrivacy == MESSAGE_PRIVACY_EVERYONE)
+    val nowMillis = System.currentTimeMillis()
+    val upcomingVisibleEvents =
+        visiblePersonalEvents
+            .filterNot { it.isPastEvent(nowMillis) }
+            .sortedBy { it.eventSortMillis() }
+    val pastVisibleEvents =
+        visiblePersonalEvents
+            .filter { it.isPastEvent(nowMillis) }
+            .sortedByDescending { it.eventSortMillis() }
 
     Column(
         modifier =
@@ -484,7 +543,8 @@ fun UserProfileScreen(
         if (canMessageUser) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            Button(
+            RippleButton(
+                text = "Send Message",
                 onClick = {
                     messagesViewModel.getOrCreateDMConversation(
                         otherUserId = userId,
@@ -494,16 +554,14 @@ fun UserProfileScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Send Message")
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (visibleFriendProfiles.isEmpty()) {
+        if (canViewFriendsSection && visibleFriendProfiles.isEmpty()) {
             Text("No friends yet")
-        } else {
+        } else if (canViewFriendsSection) {
             CollapsibleSection(
                 title = "Friends List",
                 expanded = isFriendListExpanded,
@@ -528,11 +586,39 @@ fun UserProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (canViewEventsSection && visiblePersonalEvents.isEmpty()) {
+            Text("No visible attending events.")
+        } else if (canViewEventsSection && upcomingVisibleEvents.isEmpty()) {
+            Text("No upcoming visible events.")
 
-        if (visiblePersonalEvents.isNotEmpty()) {
+            if (pastVisibleEvents.isNotEmpty()) {
+                TextButton(onClick = { showPastEvents = !showPastEvents }) {
+                    Text(if (showPastEvents) "Hide past events" else "View past events")
+                }
+            }
+
+            if (showPastEvents && pastVisibleEvents.isNotEmpty()) {
+                Text("Past Events", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                pastVisibleEvents.forEach { event ->
+                    PersonalEventCard(
+                        event = event,
+                        onClick = {
+                            onOpenEventProfile(
+                                event.id,
+                                event.ownerUserId.ifBlank { userId },
+                                event.groupId,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        } else if (canViewEventsSection) {
             Spacer(modifier = Modifier.height(16.dp))
 
             CollapsibleSection(
@@ -540,50 +626,36 @@ fun UserProfileScreen(
                 expanded = isEventListExpanded,
                 onToggle = { isEventListExpanded = !isEventListExpanded },
             ) {
-                val nowMillis = System.currentTimeMillis()
-                val upcomingEvents =
-                    visiblePersonalEvents
-                        .filterNot { it.isPastEvent(nowMillis) }
-                        .sortedBy { it.eventSortMillis() }
-                val pastEvents =
-                    visiblePersonalEvents
-                        .filter { it.isPastEvent(nowMillis) }
-                        .sortedByDescending { it.eventSortMillis() }
-
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (upcomingEvents.isEmpty()) {
-                    Text("No upcoming visible events.")
-                } else {
-                    Text("Upcoming Events", style = MaterialTheme.typography.titleSmall)
-                    Spacer(modifier = Modifier.height(8.dp))
+                Text("Upcoming Events", style = MaterialTheme.typography.titleSmall)
+                Spacer(modifier = Modifier.height(8.dp))
 
-                    upcomingEvents.forEach { event ->
-                        PersonalEventCard(
-                            event = event,
-                            onClick = {
-                                onOpenEventProfile(
-                                    event.id,
-                                    event.ownerUserId.ifBlank { userId },
-                                    event.groupId,
-                                )
-                            },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                upcomingVisibleEvents.forEach { event ->
+                    PersonalEventCard(
+                        event = event,
+                        onClick = {
+                            onOpenEventProfile(
+                                event.id,
+                                event.ownerUserId.ifBlank { userId },
+                                event.groupId,
+                            )
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                if (pastEvents.isNotEmpty()) {
+                if (pastVisibleEvents.isNotEmpty()) {
                     TextButton(onClick = { showPastEvents = !showPastEvents }) {
                         Text(if (showPastEvents) "Hide past events" else "View past events")
                     }
                 }
 
-                if (showPastEvents && pastEvents.isNotEmpty()) {
+                if (showPastEvents && pastVisibleEvents.isNotEmpty()) {
                     Text("Past Events", style = MaterialTheme.typography.titleSmall)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    pastEvents.forEach { event ->
+                    pastVisibleEvents.forEach { event ->
                         PersonalEventCard(
                             event = event,
                             onClick = {
@@ -598,15 +670,35 @@ fun UserProfileScreen(
                     }
                 }
             }
-        } else {
-            Text("No visible attending events.")
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (canViewGroupsSection) {
+            CollapsibleSection(
+                title = "Groups",
+                expanded = isGroupListExpanded,
+                onToggle = { isGroupListExpanded = !isGroupListExpanded },
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-        if (userProfile.clubIds.isEmpty()) {
-            Text("No clubs listed.")
-        } else {
+                if (userGroups.isEmpty()) {
+                    Text("No groups yet.")
+                } else {
+                    userGroups.forEach { group ->
+                        RippleButton(
+                            text = "${group.name.ifBlank { "Unnamed Group" }} (${group.memberIds.size} members)",
+                            onClick = { onOpenUserGroupProfile(group.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (canViewClubsSection) {
             CollapsibleSection(
                 title = "Clubs",
                 expanded = isClubListExpanded,
@@ -614,12 +706,16 @@ fun UserProfileScreen(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                userProfile.clubIds.forEach { clubId ->
-                    ClubLinkRow(
-                        label = clubId,
-                        onClick = { onOpenClubProfile(clubId) },
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                if (userProfile.clubIds.isEmpty()) {
+                    Text("No clubs listed.")
+                } else {
+                    userProfile.clubIds.forEach { clubId ->
+                        ClubLinkRow(
+                            label = clubId,
+                            onClick = { onOpenClubProfile(clubId) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
         }

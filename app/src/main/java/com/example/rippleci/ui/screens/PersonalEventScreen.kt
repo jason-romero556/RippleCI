@@ -17,6 +17,7 @@ import coil.compose.AsyncImage
 import com.example.rippleci.data.eventSortMillis
 import com.example.rippleci.data.isPastEvent
 import com.example.rippleci.data.models.PersonalEvent
+import com.example.rippleci.ui.components.RippleButton
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.firestore
@@ -37,9 +38,11 @@ fun PersonalEventScreen(
                 .filter { it.isPastEvent(nowMillis) }
                 .sortedByDescending { it.eventSortMillis() }
 
-        Button(onClick = onAddEventClick) {
-            Text("Add Personal Event")
-        }
+        RippleButton(
+            text = "Add Personal Event",
+            onClick = onAddEventClick,
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+        )
 
         Text("Upcoming Events")
         upcomingEvents.forEach { event ->

@@ -17,8 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rippleci.data.eventSortMillis
-import com.example.rippleci.data.isPastSchoolEvent
 import com.example.rippleci.data.isPastEvent
+import com.example.rippleci.data.isPastSchoolEvent
 import com.example.rippleci.data.models.EventInvite
 import com.example.rippleci.data.models.PersonalEvent
 import com.example.rippleci.data.models.SchoolEvent
@@ -30,6 +30,8 @@ import com.example.rippleci.data.toPersonalEvent
 import com.example.rippleci.data.toSchoolEvent
 import com.example.rippleci.ui.components.EventCard
 import com.example.rippleci.ui.components.PersonalEventCard
+import com.example.rippleci.ui.components.RippleButton
+import com.example.rippleci.ui.components.RippleOutlinedButton
 import com.example.rippleci.ui.components.helpfulLinksMenuTitleStartPadding
 import com.example.rippleci.ui.screens.CollapsibleSection
 import com.example.rippleci.ui.screens.CreatePersonalEventScreen
@@ -123,7 +125,8 @@ fun EventsScreen(
                                     .document(invite.eventId)
                             }
 
-                        eventRef.get()
+                        eventRef
+                            .get()
                             .addOnSuccessListener { eventDoc ->
                                 if (eventDoc.exists()) {
                                     val event =
@@ -301,6 +304,7 @@ fun EventsScreen(
                             "attendeeIds" to listOf(uid),
                             "invitedUserIds" to emptyList<String>(),
                             "inviteesCanInvite" to newEvent.inviteesCanInvite,
+                            "attendeeVisibility" to newEvent.attendeeVisibility,
                             "blockedUserIds" to emptyList<String>(),
                             "imageUrl" to newEvent.imageUrl,
                             "visibility" to newEvent.visibility,
@@ -362,18 +366,18 @@ fun EventsScreen(
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     modifier =
-                        Modifier.padding(
-                            start = helpfulLinksMenuTitleStartPadding,
-                            top = 16.dp,
-                            end = 16.dp,
-                            bottom = 16.dp,
-                        ),
+                        Modifier.fillMaxWidth().padding(16.dp),
                 )
             }
 
             item {
                 if (pendingInvites.isEmpty()) {
-                    Text("No pending event invites.", modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(
+                        text = "No pending event invites.",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 } else {
                     CollapsibleSection(
                         title = "Event Invites (${pendingInvites.size})",
@@ -386,15 +390,30 @@ fun EventsScreen(
                                     Text(invite.eventTitle.ifBlank { "Untitled Event" })
 
                                     Row {
-                                        Button(onClick = { acceptInvite(invite) }) {
-                                            Text("Accept")
-                                        }
+                                        RippleOutlinedButton(
+                                            text = "View Event",
+                                            onClick = {
+                                                onOpenEventProfile(
+                                                    invite.ownerUserId,
+                                                    invite.eventId,
+                                                    invite.groupId,
+                                                )
+                                            },
+                                        )
 
                                         Spacer(modifier = Modifier.width(8.dp))
 
-                                        OutlinedButton(onClick = { declineInvite(invite) }) {
-                                            Text("Decline")
-                                        }
+                                        RippleButton(
+                                            text = "Accept",
+                                            onClick = { acceptInvite(invite) },
+                                        )
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        RippleOutlinedButton(
+                                            text = "Decline",
+                                            onClick = { declineInvite(invite) },
+                                        )
                                     }
                                 }
                             }
@@ -406,12 +425,11 @@ fun EventsScreen(
             }
 
             item {
-                Button(
+                RippleButton(
+                    text = "Add Event",
                     onClick = { isCreatingEvent = true },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                ) {
-                    Text("Add Event")
-                }
+                )
             }
 
             item {
@@ -420,7 +438,12 @@ fun EventsScreen(
 
             item {
                 if (upcomingPersonalEvents.isEmpty()) {
-                    Text("No upcoming personal events.", modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(
+                        text = "No upcoming personal events.",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 } else {
                     CollapsibleSection(
                         title = "My Events (${upcomingPersonalEvents.size})",
@@ -440,7 +463,12 @@ fun EventsScreen(
 
             item {
                 if (upcomingAttendingEvents.isEmpty()) {
-                    Text("No upcoming accepted event invites.", modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(
+                        text = "No upcoming accepted event invites.",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 } else {
                     CollapsibleSection(
                         title = "Events I'm Attending (${upcomingAttendingEvents.size})",
@@ -461,19 +489,23 @@ fun EventsScreen(
 
             item {
                 if (pastEventsCount == 0) {
-                    Text("No past events.", modifier = Modifier.padding(horizontal = 16.dp))
+                    Text(
+                        text = "No past events.",
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 } else {
                     CollapsibleSection(
                         title = "Past Events ($pastEventsCount)",
                         expanded = isPastEventsExpanded,
                         onToggle = { isPastEventsExpanded = !isPastEventsExpanded },
                     ) {
-                        OutlinedButton(
+                        RippleOutlinedButton(
+                            text = "Clear Past Events",
                             onClick = { clearPastEvents(pastCustomEvents, pastMarkedSchoolEvents) },
                             modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("Clear Past Events")
-                        }
+                        )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -518,7 +550,12 @@ fun EventsScreen(
                                 )
 
                         if (schoolEvents.isEmpty()) {
-                            Text(text = "No upcoming events found.", modifier = Modifier.padding(horizontal = 16.dp))
+                            Text(
+                                text = "No upcoming events found.",
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
                         } else {
                             CollapsibleSection(
                                 title = "School Events",
@@ -526,7 +563,7 @@ fun EventsScreen(
                                 onToggle = { isSchoolExpanded = !isSchoolExpanded },
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     schoolEvents.forEach { event ->
@@ -564,20 +601,28 @@ fun EventsScreen(
                                         modifier = Modifier.fillMaxWidth().padding(24.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
                                             Text(
                                                 text = "Error: ${state.message}",
                                                 color = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.fillMaxWidth(),
                                             )
                                             Spacer(modifier = Modifier.height(8.dp))
-                                            Button(onClick = { viewModel.fetchEvents() }) {
-                                                Text("Retry")
-                                            }
+                                            RippleButton(
+                                                text = "Retry",
+                                                onClick = { viewModel.fetchEvents() },
+                                                modifier = Modifier.wrapContentWidth(),
+                                            )
                                         }
                                     }
                                 }
 
-                                is EventsUiState.Success -> Unit
+                                is EventsUiState.Success -> {
+                                    Unit
+                                }
                             }
                         }
                     }
@@ -590,5 +635,4 @@ fun EventsScreen(
 private fun pastPersonalEventKey(event: PersonalEvent): String =
     "custom_${event.ownerUserId}_${event.groupId}_${event.id}".replace("/", "_")
 
-private fun pastSchoolEventKey(event: SchoolEvent): String =
-    "school_${event.stableSchoolEventId()}".replace("/", "_")
+private fun pastSchoolEventKey(event: SchoolEvent): String = "school_${event.stableSchoolEventId()}".replace("/", "_")
